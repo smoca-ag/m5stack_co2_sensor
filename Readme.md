@@ -30,11 +30,14 @@ Note: The optional battery increases the battery operation time from 6 to 10 hou
 ### Building
 
 1. Power the Core2 module. A factory test application should be loaded. Test the device.
-2. Remove the bottom of the Core2 module. Keep the battery there or replace it with the optional bigger one. ![Front](pictures/front.jpg "Front")
+2. Remove the bottom of the Core2 module. Keep the battery there or replace it with the optional bigger one. 
+![Front](pictures/front.jpg "Front")
 3. Remove the PCB from the proto module. 
-4. Connect the SCD30 module to the proto module. We used headers. ![proto module](pictures/solder.jpg "proto")
+4. Connect the SCD30 module to the proto module. We used headers. 
+![proto module](pictures/solder.jpg "proto")
 5. Screw the proto module to the PLC Base
-6. Screw the PLC Base to the Core2 module ![together](pictures/together.jpg "connected")
+6. Screw the PLC Base to the Core2 module 
+![together](pictures/together.jpg "connected")
 7. HW Done, load the software
 
 ## Software
