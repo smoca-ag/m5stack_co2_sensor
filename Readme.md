@@ -88,12 +88,16 @@ If a microsd card formated with fat is present, a csv file, data.txt will be wri
 | 1000 - 1400 ppm | orange | used indoor air, ventilate the room, cognition is impacted, possibility of virus transmission |
 | > 1400 ppm | red | heavy used indoor air, heavy cognition impact, high possiblity of virus transmission, ventilation needed.
 
+## Extended uses (no code provided)
+* We use it at our office to control a couple of exhaust / inlet pwm computer fans to keep the CO₂ level below 800 ppm.
+* We log the measurement results to a influxdb with a grafana dashboard. The grafana instance sends alerts to telegram for CO₂ levels above 800 ppm.
+
 ## Contact
 
 If you have any suggestions for the project feel free to file an issue. If you want to build the device on a bigger scale / have any other development / prototyping needs, feel free to contact us: info@smoca.ch
 
 ## License
 
-Copyright (c) 2020 David Gunzinger / smoca AG\
+Copyright (c) 2020 David Gunzinger / smoca AG www.smoca.ch\
 Code: GPL v3\
-Text / Graphics / Photographs: CC BY-SA\
+Text / Graphics / Photographs: CC BY-SA
