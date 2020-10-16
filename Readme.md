@@ -85,6 +85,6 @@ If you have any suggestions for the project feel free to file an issue. If you w
 
 ## License
 
-Copyright (c) 2020 David Gunzinger / smoca AG www.smoca.ch\
-Code: GPL v3\
+Copyright (c) 2020 David Gunzinger / smoca AG www.smoca.ch \
+Code: GPL v3 \
 Text / Graphics / Photographs: CC BY-SA
