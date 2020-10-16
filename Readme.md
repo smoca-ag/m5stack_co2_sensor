@@ -1,6 +1,6 @@
 # Build your own portable, graphing CO₂ sensor
 
-![Device](pictures/device.jpg "The Device")
+![Device](pictures/device.png "The Device")
 
 ## Motivation
 
@@ -52,22 +52,9 @@ To initialise the device do the following:
 ## Usage
 
 **Disclaimer This is not a safety device. Always follow the local regulations regarding corona safety. No warranty is provided**
+![Device](pictures/flyer.png "Device usage")
 
-### Power On / Off the device
 
-Hold the power button for 6 seconds.
-
-### Reset the device
-
-Press the reset button
-
-### Display on / off
-
-Press the bottom left buttom
-
-### Charging
-
-Connect an usb-c charger
 
 ### Graphs
 
