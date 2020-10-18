@@ -188,7 +188,7 @@ void setup() {
     };
   }
   airSensor.setAutoSelfCalibration(false);
-  airSensor.setTemperatureOffset(6.5);
+  airSensor.setTemperatureOffset(5.5);
 
   DisbuffValue.setTextColor(TFT_YELLOW);
   DisbuffValue.drawString("Air sensor detected,", 0, 0);
