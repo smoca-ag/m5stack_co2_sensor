@@ -6,7 +6,7 @@
 
 CO₂ levels measured indoors can be used as an indicator of air quality.
 
-Outdoor air has a CO₂ ppm level of 400 ppm. Humans exhale air with 30000 ppm. You can calculate the percentage of exhaust air you are breathing by dividing measured CO₂ level above outdoor by the human exhaust level. Used air might contain aerosols which might contain the corona virus.
+Outdoor air has a CO₂ ppm level of 400 ppm. Humans exhale air with 40000 ppm. You can calculate the percentage of exhaust air you are breathing by dividing measured CO₂ level above outdoor by the human exhaust level. Used air might contain aerosols which might contain the corona virus.
 
 High indoor CO2 levels also have an impact on the cognitive performance of humans. 
 
