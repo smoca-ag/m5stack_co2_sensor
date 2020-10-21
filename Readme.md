@@ -45,7 +45,7 @@ Note: The optional battery increases the battery operation time from 6 to 10 hou
 To initialise the device do the following:
 1. Install Arduino studio
 2. Install the latest version of the m5core2 library via GitHub https://github.com/m5stack/M5Core2
-3. Install the esp32 board description https://github.com/espressif/arduino-esp32
+3. Install the esp32 board description https://github.com/espressif/arduino-esp32 (development version, core2 is not in release at the moment)
 4. Set the RTC of the device via ntp: adjust password.h to contain your wifi, run the set rtc sketch
 5. Flash the m5stack-scd30 sketch
 
