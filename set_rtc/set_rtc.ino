@@ -34,7 +34,7 @@ void setup() {
   rtcdate.Month = timeinfo.tm_mon + 1;
   rtcdate.Date = timeinfo.tm_mday;
 
-  M5.Rtc.SetData(&rtcdate);
+  M5.Rtc.SetDate(&rtcdate);
   M5.Rtc.SetTime(&rtctime);
   Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 

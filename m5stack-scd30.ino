@@ -525,7 +525,7 @@ void setTimeFromRtc() {
   struct tm tm;
   RTC_TimeTypeDef rtctime;
   RTC_DateTypeDef rtcdate;
-  M5.Rtc.GetData(&rtcdate);
+  M5.Rtc.GetDate(&rtcdate);
   M5.Rtc.GetTime(&rtctime);
   tm.tm_year = rtcdate.Year - 1900;
   tm.tm_mon = rtcdate.Month - 1;
