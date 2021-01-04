@@ -259,8 +259,12 @@ void updateTouch(struct state *state) {
     if (midLeftButton.wasPressed()) state->graph_mode = graphModeTemperature;
     if (midRightButton.wasPressed()) state->graph_mode = graphModeHumidity;
   } else if (state->menu_mode == menuModeCalibration) {
-    if (midLeftButton.wasPressed()) state->calibration_value -= 10;
-    if (midRightButton.wasPressed()) state->calibration_value += 10;
+    if (midLeftButton.wasPressed()) {
+      state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
+    }
+    if (midRightButton.wasPressed()) {
+      state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
+    }
     if (toggleAutoCalibration.wasPressed()) {
       state->auto_calibration_on = !state->auto_calibration_on;
       airSensor.setAutoSelfCalibration(state->auto_calibration_on);
