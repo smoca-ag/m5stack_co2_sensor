@@ -66,7 +66,7 @@ struct state {
   float battery_capacity;
   enum menuMode menu_mode;
   bool auto_calibration_on = false;
-  int calibration_value = 500;
+  int calibration_value = 400;
 } state;
 
 struct graph {
@@ -194,16 +194,14 @@ void setup() {
     };
   }
 
-  airSensor.setAutoSelfCalibration(false);
+  state.calibration_value = (int)airSensor.readRegister(COMMAND_SET_FORCED_RECALIBRATION_FACTOR);
+  airSensor.setAutoSelfCalibration(state.auto_calibration_on);
   airSensor.setTemperatureOffset(5.5);
 
   DisbuffValue.setTextColor(TFT_YELLOW);
   DisbuffValue.drawString("Air sensor detected,", 0, 0);
   DisbuffValue.drawString("waiting for data.", 0, 25);
   DisbuffValue.pushSprite(0, 26);
-  // you might need to force recalculate the sensor if you drop it ;)
-  // delay(1000 * 240);
-  // airSensor.setForcedRecalibrationFactor(575);
   cycle = 0;
 }
 
