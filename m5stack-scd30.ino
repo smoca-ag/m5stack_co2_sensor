@@ -35,6 +35,7 @@ SCD30 airSensor;
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffGraph = TFT_eSprite(&M5.Lcd);
+TFT_eSprite DisbuffCalibration = TFT_eSprite(&M5.Lcd);
 
 enum graphMode {
   graphModeCo2,
@@ -42,6 +43,11 @@ enum graphMode {
   graphModeHumidity,
   graphModeBatteryMah,
   graphModeLogo
+} ;
+
+enum menuMode {
+  menuModeDisplay,
+  menuModeCalibration
 } ;
 
 struct state {
@@ -58,7 +64,9 @@ struct state {
   enum graphMode graph_mode;
   bool display_sleep = false;
   float battery_capacity;
-
+  enum menuMode menu_mode;
+  bool auto_calibration_on = false;
+  int calibration_value = 500;
 } state;
 
 struct graph {
@@ -66,10 +74,9 @@ struct graph {
   float temperature[GRAPH_UNITS];
   float humidity[GRAPH_UNITS];
   float batteryMah[GRAPH_UNITS];
-
 } graph;
 
-//struct state state;
+// struct state state;
 
 // statistics
 unsigned long cycle;
@@ -77,14 +84,13 @@ int target_fps = 20;
 int frame_duration_ms = 1000 / target_fps;
 float my_nan;
 
-
 void setup() {
-  //Serial.begin(115200);
+  // Serial.begin(115200);
   my_nan = sqrt(-1);
   M5.begin();
   M5.Axp.SetCHGCurrent(AXP192::kCHG_280mA);
 
-  //   M5.Axp.ClearCoulombcounter();
+  // M5.Axp.ClearCoulombcounter();
   M5.Axp.EnableCoulombcounter();
   M5.Axp.SetLed( M5.Axp.isACIN() ? 1 : 0);
 
@@ -95,24 +101,23 @@ void setup() {
     Serial.println("An Error has occurred while mounting SPIFFS");
     return;
   }
+
   File f = SPIFFS.open(BATTERY_MAX_FILE, "r");
   String battery_string =  f.readString();
   f.close();
   Serial.println("read battery capacity" + battery_string);
+
   if (battery_string.length() > 0) {
     state.battery_capacity = battery_string.toFloat();
-
   }
   if (state.battery_capacity == 0) {
     state.battery_capacity = 700;
   }
+
   Serial.println("battery capacity" + String(state.battery_capacity));
 
-
   setDisplayPower(true);
-
   setTimeFromRtc();
-
   printTime();
 
   DisbuffHeader.createSprite(320, 26);
@@ -122,7 +127,6 @@ void setup() {
   DisbuffHeader.setTextDatum(TL_DATUM);
   DisbuffHeader.fillRect(0, 0, 320, 25, TFT_BLACK);
   DisbuffHeader.drawLine(0, 25, 320, 25, TFT_WHITE);
-
 
   DisbuffValue.createSprite(320, 117);
   DisbuffValue.setTextSize(1);
@@ -137,23 +141,25 @@ void setup() {
   DisbuffGraph.setTextDatum(TC_DATUM);
   DisbuffGraph.fillRect(0, 0, 320, 97, TFT_BLACK);
 
+  DisbuffCalibration.createSprite(320, 214);
+
   for (int i = 0; i < GRAPH_UNITS; i ++) {
     graph.temperature[i] = my_nan;
     graph.co2[i] = my_nan;
     graph.humidity[i] = my_nan;
     graph.batteryMah[i] = my_nan;
-
   }
-
 
   SD.begin();
   if (!SD.begin()) {
     Serial.println("Card Mount Failed");
   }
+
   uint8_t cardType = SD.cardType();
   if (cardType == CARD_NONE) {
     Serial.println("No SD card attached");
   }
+
   Serial.println("Initializing SD card...");
   if (!SD.begin()) {
     Serial.println("ERROR - SD card initialization failed!");
@@ -166,10 +172,10 @@ void setup() {
     Serial.println("File doens't exist");
     Serial.println("Creating file...");
     writeFile(SD, "/data.txt", "Date, Co2 (ppm), Temperature, Humidity, Battery Charge \r\n");
-  }
-  else {
+  } else {
     Serial.println("File already exists");
   }
+
   file.close();
 
   Wire.begin(G32, G33);
@@ -177,7 +183,7 @@ void setup() {
   {
     DisbuffValue.setTextColor(TFT_RED);
     Serial.println("Air sensor not detected. Please check wiring. Freezing...");
-    //M5.Lcd.printf("Air sensor not detected. Please check wiring. Freezing...");
+    // M5.Lcd.printf("Air sensor not detected. Please check wiring. Freezing...");
     DisbuffValue.drawString("Air sensor not detected.", 0, 0);
     DisbuffValue.drawString("Please check wiring.", 0, 25);
     DisbuffValue.drawString("Freezing.", 0, 50);
@@ -187,24 +193,22 @@ void setup() {
       delay(1000);
     };
   }
+
   airSensor.setAutoSelfCalibration(false);
   airSensor.setTemperatureOffset(5.5);
 
   DisbuffValue.setTextColor(TFT_YELLOW);
   DisbuffValue.drawString("Air sensor detected,", 0, 0);
   DisbuffValue.drawString("waiting for data.", 0, 25);
-
   DisbuffValue.pushSprite(0, 26);
   // you might need to force recalculate the sensor if you drop it ;)
-  //delay(1000 * 240);
+  // delay(1000 * 240);
   // airSensor.setForcedRecalibrationFactor(575);
   cycle = 0;
 }
 
 void loop() {
   unsigned long start = millis();
-
-
   struct state oldstate;
   memcpy(&oldstate, &state, sizeof(struct state));
   M5.update();
@@ -216,11 +220,13 @@ void loop() {
   updateGraph(&oldstate, &state);
   updateLed(&oldstate, &state);
 
-
   if (!state.display_sleep) {
     drawHeader(&oldstate, &state);
-    drawValues(&oldstate, &state);
-    drawGraph(&oldstate, &state);
+
+    if (state.menu_mode == menuModeDisplay) {
+      drawValues(&oldstate, &state);
+      drawGraph(&oldstate, &state);
+    }
   }
 
   writeSsd(&state);
@@ -232,34 +238,59 @@ void loop() {
   } else {
     Serial.println("we are to slow:" + String(duration));
   }
-
 }
 
-TouchButton batteryButton(240, 0, 320, 40);
+// x, y, l, h
+TouchButton batteryButton(240, 0, 80, 40);
 TouchButton co2Button(0, 26, 320, 88);
-TouchButton temperatureButton(0, 114, 180,  40);
-TouchButton humidityButton(180, 114, 240, 40);
+TouchButton midLeftButton(0, 114, 160,  40);
+TouchButton midRightButton(160, 114, 160, 40);
 
+TouchButton toggleAutoCalibration(160, 166, 60, 50);
+TouchButton changeCalibrationButton(240, 166, 60, 50);
 
 void updateTouch(struct state *state) {
-  if (batteryButton.wasPressed()) {
-    state->graph_mode =  graphModeBatteryMah;
-  } else if (co2Button.wasPressed()) {
-    state->graph_mode =  graphModeCo2;
-  } else if (temperatureButton.wasPressed()) {
-    state->graph_mode =  graphModeTemperature;
-  } else if (humidityButton.wasPressed()) {
-    state->graph_mode =  graphModeHumidity;
-  } else if (M5.BtnA.wasPressed()) {
-    if (state->display_sleep) {
-      setDisplayPower(true);
-      state->display_sleep = false;
-    } else {
-      setDisplayPower(false);
-      state->display_sleep = true;
+  if (state->menu_mode == menuModeDisplay) {
+    if (co2Button.wasPressed()) state->graph_mode = graphModeCo2;
+    if (midLeftButton.wasPressed()) state->graph_mode = graphModeTemperature;
+    if (midRightButton.wasPressed()) state->graph_mode = graphModeHumidity;
+  } else if (state->menu_mode == menuModeCalibration) {
+    if (midLeftButton.wasPressed()) {
+      state->calibration_value -= 10;
+      drawCalibration(state);
+    }
+    if (midRightButton.wasPressed()) {
+      state->calibration_value += 10;
+      drawCalibration(state);
+    }
+    if (toggleAutoCalibration.wasPressed()) {
+      state->auto_calibration_on = !state->auto_calibration_on;
+      airSensor.setAutoSelfCalibration(state->auto_calibration_on);
+      drawCalibration(state);
+    } 
+    if (changeCalibrationButton.wasPressed()) {
+      airSensor.setForcedRecalibrationFactor(state->calibration_value);
+      state->menu_mode = menuModeDisplay;
+      clearDisplayWithoutHeader();
     }
   }
+
+  if (batteryButton.wasPressed()) state->graph_mode = graphModeBatteryMah;
+  if (M5.BtnA.wasPressed()) {
+    setDisplayPower(state->display_sleep);
+    state->display_sleep = !state->display_sleep;
+  }
+  if (M5.BtnB.wasPressed()) {
+    clearDisplayWithoutHeader();
+    state->menu_mode = menuModeDisplay;
+  }
+  if (M5.BtnC.wasPressed()) {
+    clearDisplayWithoutHeader();
+    state->menu_mode = menuModeCalibration;
+    drawCalibration(state);
+  }
 }
+
 void updateTime(struct state *state) {
   if (((cycle + 1) % target_fps) != 0) {
     return;
@@ -273,18 +304,18 @@ void updateBattery(struct state *state) {
   if (((cycle + 1) % (target_fps)) != 0) {
     return;
   }
+
   int columbCharged = Read32bit(0xB0);
   int columbDischarged = Read32bit(0xB4);
   float sig = columbCharged > columbDischarged ? 1.0 : -1.0;
-
   float batVoltage = M5.Axp.GetBatVoltage();
   state->battery_current = M5.Axp.GetBatCurrent();
-
 
   if (batVoltage < 3.2 && columbDischarged > columbCharged) {
     M5.Axp.ClearCoulombcounter();
     M5.Axp.EnableCoulombcounter();
   }
+
   state->battery_voltage = batVoltage;
   state->battery_mah = 65536  * 0.5 *  (columbCharged - columbDischarged) / 3600.0 / 25.0;
 
@@ -299,8 +330,14 @@ void updateBattery(struct state *state) {
   int batteryPercent = state->battery_mah * 100 / state->battery_capacity;
   batteryPercent = max(min(100, batteryPercent), 0);
 
-
-  Serial.println("mAh: " + String(state->battery_mah) + " charged: " + String(columbCharged) + " discharched: " + String(columbDischarged) + " batteryPercent " + String(batteryPercent) + " current " + state->battery_current  + " voltage " + String(state->battery_voltage));
+  Serial.println(
+    "mAh: " + String(state->battery_mah) + 
+    " charged: " + String(columbCharged) + 
+    " discharched: " + String(columbDischarged) + 
+    " batteryPercent " + String(batteryPercent) + 
+    " current " + state->battery_current  + 
+    " voltage " + String(state->battery_voltage)
+  );
   state->battery_percent = batteryPercent;
   state->in_ac = M5.Axp.isACIN();
 }
@@ -315,6 +352,7 @@ void updateGraph(struct state *oldstate, struct state *state) {
   if (oldstate->current_time.tm_min == state->current_time.tm_min || state->co2_ppm == 0) {
     return;
   }
+
   graph.co2[state->graph_index] = state->co2_ppm;
   graph.temperature[state->graph_index] = state->temperature_celsius / 10.0;
   graph.humidity[state->graph_index] = state->humidity_percent / 10.0;
@@ -342,18 +380,16 @@ void drawHeader(struct state *oldstate, struct state *state) {
     state->display_sleep == oldstate->display_sleep) {
     return;
   }
+
   DisbuffHeader.fillRect(0, 0, 320, 24, TFT_BLACK);
   char strftime_buf[64];
   strftime(strftime_buf, sizeof(strftime_buf) - 1, "%c", &(state->current_time));
   DisbuffHeader.drawString(String(strftime_buf), 0, 1);
-
   DisbuffHeader.setTextDatum(TR_DATUM);
   DisbuffHeader.drawString(  String(state->battery_percent) + "%" + (state->in_ac ? "+" : "-"), 320, 0);
   DisbuffHeader.setTextDatum(TL_DATUM);
   DisbuffHeader.drawLine(0, 25, 320, 25, TFT_WHITE);
-
   DisbuffHeader.pushSprite(0, 0);
-
 }
 
 uint16_t co2color(int value) {
@@ -378,6 +414,7 @@ void drawValues(struct state *oldstate, struct state *state) {
     state->display_sleep == oldstate->display_sleep) {
     return;
   }
+
   DisbuffValue.fillRect(0, 0, 320, 116, TFT_BLACK);
   DisbuffValue.setFreeFont(&FreeMonoBold18pt7b);
   DisbuffValue.setTextColor(co2color(state->co2_ppm));
@@ -398,13 +435,13 @@ void drawValues(struct state *oldstate, struct state *state) {
   DisbuffValue.pushSprite(0, 26);
 }
 
-
-void drawGraph(struct state * oldstate, struct state * state) {
+void drawGraph(struct state *oldstate, struct state *state) {
   if (oldstate->graph_mode == state->graph_mode &&
       oldstate->graph_index == state->graph_index &&
       state->display_sleep == oldstate->display_sleep) {
     return;
   }
+
   DisbuffGraph.fillRect(0, 0, 320, 97, TFT_BLACK);
 
   float *values = graph.co2;
@@ -417,16 +454,18 @@ void drawGraph(struct state * oldstate, struct state * state) {
   } else if (state->graph_mode == graphModeCo2) {
     values = graph.co2;
   }
-  int i;
 
+  int i;
   float sorted[GRAPH_UNITS];
   int value_count = 0;
+
   for (i = 0; i < GRAPH_UNITS; i++) {
     float value = values[i];
     if (!isnan(value)) {
       sorted[value_count++] = value;
     }
   }
+
   if (value_count == 0) {
     return;
   }
@@ -441,7 +480,6 @@ void drawGraph(struct state * oldstate, struct state * state) {
     Serial.println("]");*/
 
   int skip = GRAPH_UNITS * 2.5 / 100;
-
   float min_value = sorted[value_count > 10 * skip ? skip : 0];
   float max_value = sorted[value_count > 10 * skip ? value_count - 1 - skip : value_count - 1];
   int last_index = ((state->graph_index - 1) % GRAPH_UNITS + GRAPH_UNITS) % GRAPH_UNITS;
@@ -464,27 +502,83 @@ void drawGraph(struct state * oldstate, struct state * state) {
       }
     }
   }
-  Serial.println("graph done");
 
+  Serial.println("graph done");
   DisbuffGraph.pushSprite(0, 144);
 }
+
+void drawCalibration(struct state *state) {
+  DisbuffCalibration.fillRect(0, 0, 320, 214, TFT_BLACK);
+
+  DisbuffCalibration.setFreeFont(&FreeMono18pt7b);
+  DisbuffCalibration.setTextColor(TFT_WHITE);
+  DisbuffCalibration.drawString("CO2 Offset: ", 60, 5);
+  
+  DisbuffCalibration.setFreeFont(&FreeMonoBold12pt7b);
+  DisbuffCalibration.setTextColor(co2color(state->calibration_value));
+  DisbuffCalibration.setTextSize(2);
+  DisbuffCalibration.drawString(String(state->calibration_value) + "ppm", 80, 35);
+  DisbuffCalibration.setTextSize(1);
+
+  DisbuffCalibration.setFreeFont(&FreeMonoBold18pt7b);
+  DisbuffCalibration.setTextColor(TFT_WHITE);
+  DisbuffCalibration.drawLine(0, 80, 320, 80, TFT_WHITE);
+  DisbuffCalibration.drawString("-", 80, 86);
+  DisbuffCalibration.drawString("+", 240, 86);
+  DisbuffCalibration.drawLine(160, 80, 160, 120, TFT_WHITE);
+  DisbuffCalibration.drawLine(0, 120, 320, 120, TFT_WHITE);
+
+  uint16_t autoCalibrationColor = state->auto_calibration_on ? TFT_GREEN : TFT_RED; 
+  DisbuffCalibration.setFreeFont(&FreeMono9pt7b);
+  DisbuffCalibration.drawString("Enable Auto", 15, 150);
+  DisbuffCalibration.drawString("Calibration", 15, 175);
+  DisbuffCalibration.setFreeFont(&FreeMono12pt7b);
+
+  DisbuffCalibration.setTextColor(autoCalibrationColor);
+  DisbuffCalibration.drawLine(160, 140, 220, 140, autoCalibrationColor);
+  DisbuffCalibration.drawLine(160, 140, 160, 190, autoCalibrationColor);
+  DisbuffCalibration.drawString(state->auto_calibration_on ? "On" : "Off", 170, 155);
+  DisbuffCalibration.drawLine(160, 190, 220, 190, autoCalibrationColor);
+  DisbuffCalibration.drawLine(220, 140, 220, 190, autoCalibrationColor);
+
+  DisbuffCalibration.setTextColor(TFT_CYAN);
+  DisbuffCalibration.drawLine(240, 140, 300, 140, TFT_CYAN);
+  DisbuffCalibration.drawLine(240, 140, 240, 190, TFT_CYAN);
+  DisbuffCalibration.drawString("Ok", 255, 155);
+  DisbuffCalibration.drawLine(240, 190, 300, 190, TFT_CYAN);
+  DisbuffCalibration.drawLine(300, 140, 300, 190, TFT_CYAN);
+
+  DisbuffCalibration.pushSprite(0, 26);
+  Serial.println("draw");
+}
+
+void clearDisplayWithoutHeader() {
+  DisbuffCalibration.fillRect(0, 0, 320, 214, TFT_BLACK);
+  DisbuffCalibration.pushSprite(0, 26);
+}
+
 void writeSsd(struct state * state) {
   if (((cycle + 3) % (2 * target_fps)) != 0) {
     return;
   }
-  String dateTime = String(state->current_time.tm_year + 1900) + "-"
-                    + padTwo(String(state->current_time.tm_mon + 1)) + "-"
-                    + padTwo(String(state->current_time.tm_mday)) + "-"
-                    + padTwo(String(state->current_time.tm_hour)) + "-"
-                    + padTwo(String(state->current_time.tm_min)) + "-"
-                    + padTwo(String(state->current_time.tm_sec));
-  String dataMessage = dateTime + "," + String(state->co2_ppm) + "," + String(state->temperature_celsius / 10.0, 2) + "," + String(state->humidity_percent / 10.0, 2) + "," +
-                       String(state->battery_mah) + "\r\n";
+
+  String dateTime = String(
+    state->current_time.tm_year + 1900) + "-" +
+    padTwo(String(state->current_time.tm_mon + 1)) + "-" +
+    padTwo(String(state->current_time.tm_mday)) + "-" +
+    padTwo(String(state->current_time.tm_hour)) + "-" +
+    padTwo(String(state->current_time.tm_min)) + "-" +
+    padTwo(String(state->current_time.tm_sec)
+  );
+  String dataMessage = 
+    dateTime + "," + 
+    String(state->co2_ppm) + "," + 
+    String(state->temperature_celsius / 10.0, 2) + "," + 
+    String(state->humidity_percent / 10.0, 2) + "," +
+    String(state->battery_mah) + "\r\n";
   Serial.println(dataMessage);
   appendFile(SD, "/data.txt", dataMessage.c_str());
 }
-
-
 
 String padTwo(String input) {
   if (input.length() == 2) {
@@ -502,13 +596,16 @@ void writeFile(fs::FS & fs, const char * path, const char * message) {
     Serial.println("Failed to open file for writing");
     return;
   }
+
   if (file.print(message)) {
     Serial.println("File written");
   } else {
     Serial.println("Write failed");
   }
+
   file.close();
 }
+
 void printTime() {
   time_t now;
   char strftime_buf[64];
@@ -519,6 +616,7 @@ void printTime() {
   Serial.printf("The current date/time in Zuerich is: %s", strftime_buf);
 
 }
+
 void setTimeFromRtc() {
   setenv("TZ", "UTC", 1);
   tzset();
@@ -560,7 +658,6 @@ void appendFile(fs::FS & fs, const char * path, const char * message) {
   file.close();
 }
 
-
 void setDisplayPower(bool state) {
   if (state) {
     M5.Lcd.setBrightness(255);
@@ -575,23 +672,23 @@ void setDisplayPower(bool state) {
   }
 }
 
-uint32_t Read32bit( uint8_t Addr )
-{
+uint32_t Read32bit( uint8_t Addr ) {
   uint32_t ReData = 0;
   Wire1.beginTransmission(0x34);
   Wire1.write(Addr);
   Wire1.endTransmission();
   Wire1.requestFrom(0x34, 4);
+
   for ( int i = 0 ; i < 4 ; i++ )
   {
     ReData <<= 8;
     ReData |= Wire1.read();
   }
+
   return ReData;
 }
 
-uint32_t ReadByte ( uint8_t Addr )
-{
+uint32_t ReadByte ( uint8_t Addr ) {
   uint32_t ReData = 0;
   Wire1.beginTransmission(0x34);
   Wire1.write(Addr);
@@ -600,8 +697,7 @@ uint32_t ReadByte ( uint8_t Addr )
   return Wire1.read();
 }
 
-void WriteByte(uint8_t Addr, uint8_t Data)
-{
+void WriteByte(uint8_t Addr, uint8_t Data) {
   Wire1.beginTransmission(0x34);
   Wire1.write(Addr);
   Wire1.write(Data);
