@@ -337,7 +337,8 @@ void updateLed(struct state *oldstate, struct state *state) {
 }
 
 void updateGraph(struct state *oldstate, struct state *state) {
-  if (oldstate->current_time.tm_min == state->current_time.tm_min || state->co2_ppm == 0) {
+  if (oldstate->current_time.tm_min == state->current_time.tm_min ||
+      state->co2_ppm == 0) {
     return;
   }
 
@@ -425,9 +426,10 @@ void drawValues(struct state *oldstate, struct state *state) {
 }
 
 void drawGraph(struct state *oldstate, struct state *state) {
-  if (oldstate->graph_mode == state->graph_mode &&
-      oldstate->graph_index == state->graph_index &&
-      state->display_sleep == oldstate->display_sleep) {
+  if (state->graph_mode == oldstate->graph_mode &&
+      state->graph_index == oldstate->graph_index &&
+      state->display_sleep == oldstate->display_sleep &&
+      state->menu_mode == oldstate->menu_mode) {
     return;
   }
 
