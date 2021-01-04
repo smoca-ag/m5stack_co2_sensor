@@ -35,7 +35,7 @@ SCD30 airSensor;
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffGraph = TFT_eSprite(&M5.Lcd);
-TFT_eSprite DisbuffCalibration = TFT_eSprite(&M5.Lcd);
+TFT_eSprite DisbuffBody = TFT_eSprite(&M5.Lcd);
 
 enum graphMode {
   graphModeCo2,
@@ -141,7 +141,7 @@ void setup() {
   DisbuffGraph.setTextDatum(TC_DATUM);
   DisbuffGraph.fillRect(0, 0, 320, 97, TFT_BLACK);
 
-  DisbuffCalibration.createSprite(320, 214);
+  DisbuffBody.createSprite(320, 214);
 
   for (int i = 0; i < GRAPH_UNITS; i ++) {
     graph.temperature[i] = my_nan;
@@ -224,8 +224,11 @@ void loop() {
     drawHeader(&oldstate, &state);
 
     if (state.menu_mode == menuModeDisplay) {
+      clearBody(&oldstate, &state);
       drawValues(&oldstate, &state);
       drawGraph(&oldstate, &state);
+    } else if (state.menu_mode == menuModeCalibration) {
+      drawCalibration(&oldstate, &state);
     }
   }
 
@@ -240,7 +243,7 @@ void loop() {
   }
 }
 
-// x, y, l, h
+// x, y, w, h
 TouchButton batteryButton(240, 0, 80, 40);
 TouchButton co2Button(0, 26, 320, 88);
 TouchButton midLeftButton(0, 114, 160,  40);
@@ -251,44 +254,29 @@ TouchButton changeCalibrationButton(240, 166, 60, 50);
 
 void updateTouch(struct state *state) {
   if (state->menu_mode == menuModeDisplay) {
+    if (batteryButton.wasPressed()) state->graph_mode = graphModeBatteryMah;
     if (co2Button.wasPressed()) state->graph_mode = graphModeCo2;
     if (midLeftButton.wasPressed()) state->graph_mode = graphModeTemperature;
     if (midRightButton.wasPressed()) state->graph_mode = graphModeHumidity;
   } else if (state->menu_mode == menuModeCalibration) {
-    if (midLeftButton.wasPressed()) {
-      state->calibration_value -= 10;
-      drawCalibration(state);
-    }
-    if (midRightButton.wasPressed()) {
-      state->calibration_value += 10;
-      drawCalibration(state);
-    }
+    if (midLeftButton.wasPressed()) state->calibration_value -= 10;
+    if (midRightButton.wasPressed()) state->calibration_value += 10;
     if (toggleAutoCalibration.wasPressed()) {
       state->auto_calibration_on = !state->auto_calibration_on;
       airSensor.setAutoSelfCalibration(state->auto_calibration_on);
-      drawCalibration(state);
     } 
     if (changeCalibrationButton.wasPressed()) {
       airSensor.setForcedRecalibrationFactor(state->calibration_value);
       state->menu_mode = menuModeDisplay;
-      clearDisplayWithoutHeader();
     }
   }
 
-  if (batteryButton.wasPressed()) state->graph_mode = graphModeBatteryMah;
   if (M5.BtnA.wasPressed()) {
     setDisplayPower(state->display_sleep);
     state->display_sleep = !state->display_sleep;
   }
-  if (M5.BtnB.wasPressed()) {
-    clearDisplayWithoutHeader();
-    state->menu_mode = menuModeDisplay;
-  }
-  if (M5.BtnC.wasPressed()) {
-    clearDisplayWithoutHeader();
-    state->menu_mode = menuModeCalibration;
-    drawCalibration(state);
-  }
+  if (M5.BtnB.wasPressed()) state->menu_mode = menuModeDisplay;
+  if (M5.BtnC.wasPressed()) state->menu_mode = menuModeCalibration;
 }
 
 void updateTime(struct state *state) {
@@ -411,7 +399,8 @@ void drawValues(struct state *oldstate, struct state *state) {
     state->temperature_celsius == oldstate->temperature_celsius &&
     state->humidity_percent == oldstate->humidity_percent &&
     state->co2_ppm == oldstate->co2_ppm &&
-    state->display_sleep == oldstate->display_sleep) {
+    state->display_sleep == oldstate->display_sleep &&
+    state->menu_mode == oldstate->menu_mode) {
     return;
   }
 
@@ -507,54 +496,63 @@ void drawGraph(struct state *oldstate, struct state *state) {
   DisbuffGraph.pushSprite(0, 144);
 }
 
-void drawCalibration(struct state *state) {
-  DisbuffCalibration.fillRect(0, 0, 320, 214, TFT_BLACK);
+void drawCalibration(struct state *oldstate, struct state *state) {
+  if (state->display_sleep == oldstate->display_sleep &&
+      state->calibration_value == oldstate->calibration_value &&
+      state->auto_calibration_on == oldstate->auto_calibration_on &&
+      state->menu_mode == oldstate->menu_mode) {
+    return;
+  }
 
-  DisbuffCalibration.setFreeFont(&FreeMono18pt7b);
-  DisbuffCalibration.setTextColor(TFT_WHITE);
-  DisbuffCalibration.drawString("CO2 Offset: ", 60, 5);
+  DisbuffBody.fillRect(0, 0, 320, 214, TFT_BLACK);
+
+  DisbuffBody.setFreeFont(&FreeMono18pt7b);
+  DisbuffBody.setTextColor(TFT_WHITE);
+  DisbuffBody.drawString("CO2 Offset: ", 60, 5);
   
-  DisbuffCalibration.setFreeFont(&FreeMonoBold12pt7b);
-  DisbuffCalibration.setTextColor(co2color(state->calibration_value));
-  DisbuffCalibration.setTextSize(2);
-  DisbuffCalibration.drawString(String(state->calibration_value) + "ppm", 80, 35);
-  DisbuffCalibration.setTextSize(1);
+  DisbuffBody.setFreeFont(&FreeMonoBold12pt7b);
+  DisbuffBody.setTextColor(co2color(state->calibration_value));
+  DisbuffBody.setTextSize(2);
+  DisbuffBody.drawString(String(state->calibration_value) + "ppm", 80, 35);
+  DisbuffBody.setTextSize(1);
 
-  DisbuffCalibration.setFreeFont(&FreeMonoBold18pt7b);
-  DisbuffCalibration.setTextColor(TFT_WHITE);
-  DisbuffCalibration.drawLine(0, 80, 320, 80, TFT_WHITE);
-  DisbuffCalibration.drawString("-", 80, 86);
-  DisbuffCalibration.drawString("+", 240, 86);
-  DisbuffCalibration.drawLine(160, 80, 160, 120, TFT_WHITE);
-  DisbuffCalibration.drawLine(0, 120, 320, 120, TFT_WHITE);
+  DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
+  DisbuffBody.setTextColor(TFT_WHITE);
+  DisbuffBody.drawLine(0, 80, 320, 80, TFT_WHITE);
+  DisbuffBody.drawString("-", 80, 86);
+  DisbuffBody.drawString("+", 240, 86);
+  DisbuffBody.drawLine(160, 80, 160, 120, TFT_WHITE);
+  DisbuffBody.drawLine(0, 120, 320, 120, TFT_WHITE);
 
   uint16_t autoCalibrationColor = state->auto_calibration_on ? TFT_GREEN : TFT_RED; 
-  DisbuffCalibration.setFreeFont(&FreeMono9pt7b);
-  DisbuffCalibration.drawString("Enable Auto", 15, 150);
-  DisbuffCalibration.drawString("Calibration", 15, 175);
-  DisbuffCalibration.setFreeFont(&FreeMono12pt7b);
+  DisbuffBody.setFreeFont(&FreeMono9pt7b);
+  DisbuffBody.drawString("Enable Auto", 15, 150);
+  DisbuffBody.drawString("Calibration", 15, 175);
+  DisbuffBody.setFreeFont(&FreeMono12pt7b);
 
-  DisbuffCalibration.setTextColor(autoCalibrationColor);
-  DisbuffCalibration.drawLine(160, 140, 220, 140, autoCalibrationColor);
-  DisbuffCalibration.drawLine(160, 140, 160, 190, autoCalibrationColor);
-  DisbuffCalibration.drawString(state->auto_calibration_on ? "On" : "Off", 170, 155);
-  DisbuffCalibration.drawLine(160, 190, 220, 190, autoCalibrationColor);
-  DisbuffCalibration.drawLine(220, 140, 220, 190, autoCalibrationColor);
+  DisbuffBody.setTextColor(autoCalibrationColor);
+  DisbuffBody.drawLine(160, 140, 220, 140, autoCalibrationColor);
+  DisbuffBody.drawLine(160, 140, 160, 190, autoCalibrationColor);
+  DisbuffBody.drawString(state->auto_calibration_on ? "On" : "Off", 170, 155);
+  DisbuffBody.drawLine(160, 190, 220, 190, autoCalibrationColor);
+  DisbuffBody.drawLine(220, 140, 220, 190, autoCalibrationColor);
 
-  DisbuffCalibration.setTextColor(TFT_CYAN);
-  DisbuffCalibration.drawLine(240, 140, 300, 140, TFT_CYAN);
-  DisbuffCalibration.drawLine(240, 140, 240, 190, TFT_CYAN);
-  DisbuffCalibration.drawString("Ok", 255, 155);
-  DisbuffCalibration.drawLine(240, 190, 300, 190, TFT_CYAN);
-  DisbuffCalibration.drawLine(300, 140, 300, 190, TFT_CYAN);
+  DisbuffBody.setTextColor(TFT_CYAN);
+  DisbuffBody.drawLine(240, 140, 300, 140, TFT_CYAN);
+  DisbuffBody.drawLine(240, 140, 240, 190, TFT_CYAN);
+  DisbuffBody.drawString("Ok", 255, 155);
+  DisbuffBody.drawLine(240, 190, 300, 190, TFT_CYAN);
+  DisbuffBody.drawLine(300, 140, 300, 190, TFT_CYAN);
 
-  DisbuffCalibration.pushSprite(0, 26);
+  DisbuffBody.pushSprite(0, 26);
   Serial.println("draw");
 }
 
-void clearDisplayWithoutHeader() {
-  DisbuffCalibration.fillRect(0, 0, 320, 214, TFT_BLACK);
-  DisbuffCalibration.pushSprite(0, 26);
+void clearBody(struct state *oldstate, struct state *state) {
+  if (oldstate->menu_mode != state->menu_mode) {
+    DisbuffBody.fillRect(0, 0, 320, 214, TFT_BLACK);
+    DisbuffBody.pushSprite(0, 26);
+  }
 }
 
 void writeSsd(struct state * state) {
