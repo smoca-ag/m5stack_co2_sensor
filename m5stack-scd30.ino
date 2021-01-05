@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include "SparkFun_SCD30_Arduino_Library.h" //Click here to get the library: http://librarymanager/All#SparkFun_SCD30
 
+#include "Logo.h"
+
 SCD30 airSensor;
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
@@ -88,6 +90,10 @@ void setup() {
   // Serial.begin(115200);
   my_nan = sqrt(-1);
   M5.begin();
+
+  M5.Lcd.setSwapBytes(true);
+  M5.Lcd.pushImage(96, 96, 128, 32, smoca);
+
   M5.Axp.SetCHGCurrent(AXP192::kCHG_280mA);
 
   // M5.Axp.ClearCoulombcounter();
@@ -183,7 +189,6 @@ void setup() {
   {
     DisbuffValue.setTextColor(TFT_RED);
     Serial.println("Air sensor not detected. Please check wiring. Freezing...");
-    // M5.Lcd.printf("Air sensor not detected. Please check wiring. Freezing...");
     DisbuffValue.drawString("Air sensor not detected.", 0, 0);
     DisbuffValue.drawString("Please check wiring.", 0, 25);
     DisbuffValue.drawString("Freezing.", 0, 50);
@@ -195,13 +200,10 @@ void setup() {
   }
 
   state.calibration_value = (int)airSensor.readRegister(COMMAND_SET_FORCED_RECALIBRATION_FACTOR);
+  state.auto_calibration_on = airSensor.getAutoSelfCalibration();
   airSensor.setAutoSelfCalibration(state.auto_calibration_on);
   airSensor.setTemperatureOffset(5.5);
 
-  DisbuffValue.setTextColor(TFT_YELLOW);
-  DisbuffValue.drawString("Air sensor detected,", 0, 0);
-  DisbuffValue.drawString("waiting for data.", 0, 25);
-  DisbuffValue.pushSprite(0, 26);
   cycle = 0;
 }
 
@@ -242,13 +244,13 @@ void loop() {
 }
 
 // x, y, w, h
-TouchButton batteryButton(240, 0, 80, 40);
-TouchButton co2Button(0, 26, 320, 88);
-TouchButton midLeftButton(0, 114, 160,  40);
-TouchButton midRightButton(160, 114, 160, 40);
+Button batteryButton(240, 0, 80, 40);
+Button co2Button(0, 26, 320, 88);
+Button midLeftButton(0, 114, 160,  40);
+Button midRightButton(160, 114, 160, 40);
 
-TouchButton toggleAutoCalibration(160, 166, 60, 50);
-TouchButton changeCalibrationButton(240, 166, 60, 50);
+Button toggleAutoCalibration(160, 166, 60, 50);
+Button changeCalibrationButton(240, 166, 60, 50);
 
 void updateTouch(struct state *state) {
   if (state->menu_mode == menuModeDisplay) {
