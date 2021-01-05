@@ -27,6 +27,8 @@
 #define GRAPH_UNITS 240
 
 #define BATTERY_MAX_FILE "/battery_max"
+#define AUTO_CALIBRATION_FILE "/auto_calibration"
+
 #include <stdio.h>
 #include "SparkFun_SCD30_Arduino_Library.h" //Click here to get the library: http://librarymanager/All#SparkFun_SCD30
 
@@ -111,6 +113,7 @@ void setup() {
   File f = SPIFFS.open(BATTERY_MAX_FILE, "r");
   String battery_string =  f.readString();
   f.close();
+
   Serial.println("read battery capacity" + battery_string);
 
   if (battery_string.length() > 0) {
@@ -121,6 +124,12 @@ void setup() {
   }
 
   Serial.println("battery capacity" + String(state.battery_capacity));
+
+  f = SPIFFS.open(AUTO_CALIBRATION_FILE, "r");
+  String auto_cal_string = f.readString();
+  f.close();
+
+  state.auto_calibration_on = auto_cal_string == "1" ? true : false;
 
   setDisplayPower(true);
   setTimeFromRtc();
@@ -185,7 +194,8 @@ void setup() {
   file.close();
 
   Wire.begin(G32, G33);
-  if (airSensor.begin(Wire, false) == false)
+
+  if (airSensor.begin(Wire, state.auto_calibration_on) == false)
   {
     DisbuffValue.setTextColor(TFT_RED);
     Serial.println("Air sensor not detected. Please check wiring. Freezing...");
@@ -200,10 +210,8 @@ void setup() {
   }
 
   state.calibration_value = (int)airSensor.readRegister(COMMAND_SET_FORCED_RECALIBRATION_FACTOR);
-  state.auto_calibration_on = airSensor.getAutoSelfCalibration();
-  airSensor.setAutoSelfCalibration(state.auto_calibration_on);
   airSensor.setTemperatureOffset(5.5);
-
+  airSensor.setAltitudeCompensation(440);
   cycle = 0;
 }
 
@@ -249,7 +257,7 @@ Button co2Button(0, 26, 320, 88);
 Button midLeftButton(0, 114, 160,  40);
 Button midRightButton(160, 114, 160, 40);
 
-Button toggleAutoCalibration(160, 166, 60, 50);
+Button toggleAutoCalibrationButton(160, 166, 60, 50);
 Button changeCalibrationButton(240, 166, 60, 50);
 
 void updateTouch(struct state *state) {
@@ -265,9 +273,12 @@ void updateTouch(struct state *state) {
     if (midRightButton.wasPressed()) {
       state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
     }
-    if (toggleAutoCalibration.wasPressed()) {
+    if (toggleAutoCalibrationButton.wasPressed()) {
       state->auto_calibration_on = !state->auto_calibration_on;
       airSensor.setAutoSelfCalibration(state->auto_calibration_on);
+      File f = SPIFFS.open(AUTO_CALIBRATION_FILE, "w");
+      f.print(String(state->auto_calibration_on));
+      f.close();
     } 
     if (changeCalibrationButton.wasPressed()) {
       airSensor.setForcedRecalibrationFactor(state->calibration_value);
