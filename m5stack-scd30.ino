@@ -24,15 +24,13 @@
 #include <SPIFFS.h>
 
 #include <M5Core2.h>
-#define GRAPH_UNITS 240
-
-#define BATTERY_MAX_FILE "/battery_max"
-#define AUTO_CALIBRATION_FILE "/auto_calibration"
-
 #include <stdio.h>
 #include "SparkFun_SCD30_Arduino_Library.h" //Click here to get the library: http://librarymanager/All#SparkFun_SCD30
 
 #include "Logo.h"
+
+#define GRAPH_UNITS 240
+#define STATE_FILE "/state"
 
 SCD30 airSensor;
 
@@ -110,26 +108,32 @@ void setup() {
     return;
   }
 
-  File f = SPIFFS.open(BATTERY_MAX_FILE, "r");
-  String battery_string =  f.readString();
-  f.close();
+  File f = SPIFFS.open(STATE_FILE, "r");
 
-  Serial.println("read battery capacity" + battery_string);
+  if (f) {
+    String battery_string =  f.readStringUntil('\n');
+    String auto_cal_string = f.readStringUntil('\n');
+    String calibration_string = f.readStringUntil('\n');
+    f.close();
 
-  if (battery_string.length() > 0) {
-    state.battery_capacity = battery_string.toFloat();
+    Serial.println("read battery capacity" + battery_string);
+
+    if (battery_string.length() > 0) {
+      state.battery_capacity = battery_string.toFloat();
+    }
+    if (state.battery_capacity == 0) {
+      state.battery_capacity = 700;
+    }
+
+    state.auto_calibration_on = auto_cal_string == "1" ? true : false;
+    state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
+
+    Serial.println("battery capacity: " + String(state.battery_capacity));
+    Serial.println("auto cal: " + String(state.auto_calibration_on));
+    Serial.println("calibration: " + String(state.calibration_value));
+  } else {
+    Serial.println("state file could not be read");
   }
-  if (state.battery_capacity == 0) {
-    state.battery_capacity = 700;
-  }
-
-  Serial.println("battery capacity" + String(state.battery_capacity));
-
-  f = SPIFFS.open(AUTO_CALIBRATION_FILE, "r");
-  String auto_cal_string = f.readString();
-  f.close();
-
-  state.auto_calibration_on = auto_cal_string == "1" ? true : false;
 
   setDisplayPower(true);
   setTimeFromRtc();
@@ -209,7 +213,6 @@ void setup() {
     };
   }
 
-  state.calibration_value = (int)airSensor.readRegister(COMMAND_SET_FORCED_RECALIBRATION_FACTOR);
   airSensor.setTemperatureOffset(5.5);
   airSensor.setAltitudeCompensation(440);
   cycle = 0;
@@ -251,6 +254,16 @@ void loop() {
   }
 }
 
+void updateStateFile(struct state *state) {
+  File f = SPIFFS.open(STATE_FILE, "w");
+  f.print(
+    (String)state->battery_capacity + "\n" +
+    (String)state->auto_calibration_on + "\n" +
+    (String)state->calibration_value + "\n"
+  );
+  f.close();
+}
+
 // x, y, w, h
 Button batteryButton(240, 0, 80, 40);
 Button co2Button(0, 26, 320, 88);
@@ -276,13 +289,12 @@ void updateTouch(struct state *state) {
     if (toggleAutoCalibrationButton.wasPressed()) {
       state->auto_calibration_on = !state->auto_calibration_on;
       airSensor.setAutoSelfCalibration(state->auto_calibration_on);
-      File f = SPIFFS.open(AUTO_CALIBRATION_FILE, "w");
-      f.print(String(state->auto_calibration_on));
-      f.close();
+      updateStateFile(state);
     } 
     if (changeCalibrationButton.wasPressed()) {
       airSensor.setForcedRecalibrationFactor(state->calibration_value);
       state->menu_mode = menuModeDisplay;
+      updateStateFile(state);
     }
   }
 
@@ -325,9 +337,7 @@ void updateBattery(struct state *state) {
   if (state->in_ac && abs(state->battery_current) < 0.1 && state->battery_voltage >= 4.15 && abs(state->battery_mah - state->battery_capacity) > 1) {
     Serial.println("maximum found " + String(state->battery_mah));
     state->battery_capacity = state->battery_mah;
-    File f = SPIFFS.open(BATTERY_MAX_FILE, "w");
-    f.print(String(state->battery_capacity));
-    f.close();
+    updateStateFile(state);
   }
 
   int batteryPercent = state->battery_mah * 100 / state->battery_capacity;
@@ -562,7 +572,6 @@ void drawCalibration(struct state *oldstate, struct state *state) {
   DisbuffBody.drawLine(300, 140, 300, 190, TFT_CYAN);
 
   DisbuffBody.pushSprite(0, 26);
-  Serial.println("draw");
 }
 
 void clearBody(struct state *oldstate, struct state *state) {
