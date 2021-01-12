@@ -73,8 +73,9 @@ enum graphMode {
 } ;
 
 enum menuMode {
-  menuModeDisplay,
-  menuModeCalibration
+  menuModeGraphs,
+  menuModeCalibrationSettings,
+  menuModeWiFiSettings
 } ;
 
 struct state {
@@ -94,8 +95,9 @@ struct state {
   enum menuMode menu_mode;
   bool auto_calibration_on = false;
   int calibration_value = 400;
-  bool is_wifi_on = false; // todo: just connect if true
-  bool is_requesting_cp = false;
+  bool is_wifi_activated = false;
+  bool is_requesting_reset = false;
+  wl_status_t wifi_status = WL_DISCONNECTED;
 } state;
 
 struct graph {
@@ -105,13 +107,25 @@ struct graph {
   float batteryMah[GRAPH_UNITS];
 } graph;
 
-// x, y, w, h
+// background, text, outline
+ButtonColors offWhite     = {BLACK, WHITE, WHITE};
+ButtonColors onWhite      = {WHITE, BLACK, WHITE};
+ButtonColors offCyan      = {BLACK, CYAN, CYAN};
+ButtonColors onCyan       = {CYAN, BLACK, CYAN};
+ButtonColors offRed       = {BLACK, RED, RED};
+ButtonColors onRed        = {RED, BLACK, RED};
+ButtonColors offGreen     = {BLACK, GREEN, GREEN};
+ButtonColors onGreen      = {GREEN, BLACK, GREEN};
+
+// x, y, w, h, rot, txt, off col, on color, txt pos, x-offset, y-offset, corner radius 
 Button batteryButton(240, 0, 80, 40);
 Button co2Button(0, 26, 320, 88);
-Button midLeftButton(0, 114, 160,  40);
-Button midRightButton(160, 114, 160, 40);
-Button toggleAutoCalibrationButton(160, 166, 60, 50);
-Button changeCalibrationButton(240, 166, 60, 50);
+Button midLeftButton(-2, 104, 163,  40, false, "midLeft", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
+Button midRightButton(161, 104, 164, 40, false, "midRight", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
+Button toggleAutoCalButton(160, 166, 60, 50, false, "OFF", offRed, onRed);
+Button submitCalibrationButton(240, 166, 60, 50, false, "OK", offCyan, onCyan);
+Button toggleWiFiButton(20, 166, 120, 50, false, "OFF", offRed, onRed);
+Button resetWiFiButton(180, 166, 120, 50, false, "Reset", offCyan, onCyan);
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue  = TFT_eSprite(&M5.Lcd);
@@ -171,7 +185,6 @@ void setup() {
     return;
   }
 
-  startConfigurationPanel();
   loadPersistentState();
   setDisplayPower(true);
   setTimeFromRtc();
@@ -187,6 +200,8 @@ void setup() {
 
   initSD();
   initAirSensor();
+  initAPIPConfigStruct(WM_AP_IPconfig);
+  initSTAIPConfigStruct(WM_STA_IPconfig);
   cycle = 0;
 }
 
@@ -196,27 +211,51 @@ void loop() {
   memcpy(&oldstate, &state, sizeof(struct state));
   M5.update();
 
-  requestConfigurationPanel(&oldstate, &state);
-  checkStatus();
-
   updateTouch(&state);
   updateTime(&state);
   updateBattery(&state);
   updateCo2(&state);
   updateGraph(&oldstate, &state);
   updateLed(&oldstate, &state);
+  updateStateFile(&oldstate, &state);
+  state.wifi_status = WiFi.status();
 
   if (!state.display_sleep) {
     drawHeader(&oldstate, &state);
 
-    if (state.menu_mode == menuModeDisplay) {
+    if (state.menu_mode == menuModeGraphs) {
       clearBody(&oldstate, &state);
       drawValues(&oldstate, &state);
       drawGraph(&oldstate, &state);
-    } else if (state.menu_mode == menuModeCalibration) {
-      drawCalibration(&oldstate, &state);
+    } else if (state.menu_mode == menuModeCalibrationSettings) {
+      clearBody(&oldstate, &state);
+      drawCalibrationSettings(&oldstate, &state);
+    } else if (state.menu_mode == menuModeWiFiSettings) {
+      clearBody(&oldstate, &state);
+      drawWiFiSettings(&oldstate, &state);
     }
   }
+
+  if (state.is_wifi_activated && state.wifi_status == WL_CONNECT_FAILED)
+    state.is_wifi_activated = false;
+
+  if (!state.is_wifi_activated && oldstate.is_wifi_activated)
+    disconnectWiFi();
+
+  if (state.is_wifi_activated && WiFi.status() != WL_CONNECTED) {
+    ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
+    startWiFiManager(&ESPAsync_WiFiManager);
+  }
+
+  if (state.is_requesting_reset) {
+    ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
+    ESPAsync_WiFiManager.resetSettings();
+    ESPAsync_WiFiManager.resetSettings();
+    startWiFiManager(&ESPAsync_WiFiManager);
+    state.is_requesting_reset = false;
+  }
+
+  checkWiFiStatus();
 
   writeSsd(&state);
   cycle++;
@@ -261,6 +300,7 @@ void loadPersistentState() {
     String battery_string =  file.readStringUntil('\n');
     String auto_cal_string = file.readStringUntil('\n');
     String calibration_string = file.readStringUntil('\n');
+    String is_wifi_activated = file.readStringUntil('\n');
     file.close();
 
     if (battery_string.length() > 0) {
@@ -272,21 +312,26 @@ void loadPersistentState() {
 
     state.auto_calibration_on = auto_cal_string == "1" ? true : false;
     state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
-
-    Serial.println("battery capacity: " + String(state.battery_capacity));
-    Serial.println("auto cal: " + String(state.auto_calibration_on));
-    Serial.println("calibration: " + String(state.calibration_value));
+    state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
   } else {
     Serial.println("state file could not be read.");
   }
 }
 
-void updateStateFile(struct state *state) {
+void updateStateFile(struct state *oldstate, struct state *state) {
+  if (state->battery_capacity == oldstate->battery_capacity &&
+      state->auto_calibration_on == oldstate->auto_calibration_on &&
+      state->calibration_value == oldstate->calibration_value &&
+      state->is_wifi_activated == oldstate->is_wifi_activated) {
+        return;
+      }
+
   File f = SPIFFS.open(STATE_FILENAME, "w");
   f.print(
     (String)state->battery_capacity + "\n" +
     (String)state->auto_calibration_on + "\n" +
-    (String)state->calibration_value + "\n"
+    (String)state->calibration_value + "\n" +
+    (String)state->is_wifi_activated + "\n"
   );
   f.close();
 }
@@ -308,7 +353,7 @@ void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig) {
 }
 
 void initSD() {
-    SD.begin();
+  SD.begin();
   if (!SD.begin()) {
     Serial.println("Card Mount Failed");
   }
@@ -357,14 +402,7 @@ void initAirSensor() {
   airSensor.setAltitudeCompensation(440);
 }
 
-void checkWiFi() {
-  if ( (WiFi.status() != WL_CONNECTED) ) {
-    Serial.println("WiFi lost. Call connectMultiWiFi in loop");
-    connectMultiWiFi();
-  }
-}
-
-void checkStatus() {
+void checkWiFiStatus() {
   static ulong checkwifi_timeout = 0;
   static ulong current_millis;
 
@@ -374,6 +412,70 @@ void checkStatus() {
   if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
     checkWiFi();
     checkwifi_timeout = current_millis + WIFICHECK_INTERVAL;
+  }
+}
+
+void checkWiFi() {
+  if ( (WiFi.status() != WL_CONNECTED && state.is_wifi_activated) ) {
+    Serial.println("WiFi lost. Trying to reconnect.");
+    connectMultiWiFi();
+  }
+}
+
+uint8_t connectMultiWiFi() {
+  #define WIFI_MULTI_1ST_CONNECT_WAITING_MS 0
+  #define WIFI_MULTI_CONNECT_WAITING_MS 100L
+  uint8_t status;
+  LOGERROR(F("ConnectMultiWiFi with :"));
+  
+  if ( (Router_SSID != "") && (Router_Pass != "") ) {
+    LOGERROR3(F("* Flash-stored Router_SSID = "), Router_SSID, F(", Router_Pass = "), Router_Pass );
+  }
+
+  for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
+    if ( (String(WM_config.WiFi_Creds[i].wifi_ssid) != "") && (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) ) {
+      LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw );
+    }
+  }
+  
+  LOGERROR(F("Connecting MultiWifi..."));
+  WiFi.mode(WIFI_STA);
+  
+#if !USE_DHCP_IP
+  configWiFi(WM_STA_IPconfig);
+#endif
+
+  int i = 0;
+  status = wifiMulti.run();
+  delay(WIFI_MULTI_1ST_CONNECT_WAITING_MS);
+
+  while ( ( i++ < 20 ) && ( status != WL_CONNECTED ) ) {
+    status = wifiMulti.run();
+
+    if ( status == WL_CONNECTED )
+      break;
+    else
+      delay(WIFI_MULTI_CONNECT_WAITING_MS);
+  }
+
+  if ( status == WL_CONNECTED ) {
+    LOGERROR1(F("WiFi connected after time: "), i);
+    LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
+    LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP() );
+    Serial.println("WiFi Connected SSID: " + (String)WiFi.SSID());
+  }
+  else {
+    LOGERROR(F("WiFi not connected"));
+    Serial.println("WiFi not connected");
+  }
+
+  return status;
+}
+
+void disconnectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    WiFi.disconnect(true);
+    Serial.println("WiFi is disabled.");
   }
 }
 
@@ -426,86 +528,35 @@ void saveConfigData() {
   }
 }
 
-uint8_t connectMultiWiFi() {
-  #define WIFI_MULTI_1ST_CONNECT_WAITING_MS 0
-  #define WIFI_MULTI_CONNECT_WAITING_MS 100L
-  uint8_t status;
-  LOGERROR(F("ConnectMultiWiFi with :"));
-  
-  if ( (Router_SSID != "") && (Router_Pass != "") ) {
-    LOGERROR3(F("* Flash-stored Router_SSID = "), Router_SSID, F(", Router_Pass = "), Router_Pass );
-  }
-
-  for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-    if ( (String(WM_config.WiFi_Creds[i].wifi_ssid) != "") && (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) ) {
-      LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw );
-    }
-  }
-  
-  LOGERROR(F("Connecting MultiWifi..."));
-  WiFi.mode(WIFI_STA);
-  
-#if !USE_DHCP_IP
-  configWiFi(WM_STA_IPconfig);
-#endif
-
-  int i = 0;
-  status = wifiMulti.run();
-  delay(WIFI_MULTI_1ST_CONNECT_WAITING_MS);
-
-  while ( ( i++ < 20 ) && ( status != WL_CONNECTED ) ) {
-    status = wifiMulti.run();
-
-    if ( status == WL_CONNECTED )
-      break;
-    else
-      delay(WIFI_MULTI_CONNECT_WAITING_MS);
-  }
-
-  if ( status == WL_CONNECTED ) {
-    LOGERROR1(F("WiFi connected after time: "), i);
-    LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
-    LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP() );
-  }
-  else
-    LOGERROR(F("WiFi not connected"));
-
-  return status;
-}
-
-void startConfigurationPanel() {
-  initAPIPConfigStruct(WM_AP_IPconfig);
-  initSTAIPConfigStruct(WM_STA_IPconfig);
-
+void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
   unsigned long startedAt = millis();
-  ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-  ESPAsync_WiFiManager.setDebugOutput(true);
-  ESPAsync_WiFiManager.setAPStaticIPConfig(WM_AP_IPconfig); // set custom IP
-  ESPAsync_WiFiManager.setMinimumSignalQuality(-1);
-  ESPAsync_WiFiManager.setConfigPortalChannel(0);
+  ESPAsync_WiFiManager->setDebugOutput(true);
+  ESPAsync_WiFiManager->setAPStaticIPConfig(WM_AP_IPconfig); // set custom IP
+  ESPAsync_WiFiManager->setMinimumSignalQuality(-1);
+  ESPAsync_WiFiManager->setConfigPortalChannel(0);
 
-#if !USE_DHCP_IP    
-    #if USE_CONFIGURABLE_DNS  
+#if !USE_DHCP_IP
+  #if USE_CONFIGURABLE_DNS  
     // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
-    ESPAsync_wifiManager.setSTAStaticIPConfig(stationIP, gatewayIP, netMask, dns1IP, dns2IP);  
+    ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask, dns1IP, dns2IP);  
   #else
     // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-    ESPAsync_wifiManager.setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
+    ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
   #endif 
 #endif     
 
   // can't use WiFi.SSID() in ESP32as it's only valid after connected.
   // SSID and Password stored in ESP32 wifi_ap_record_t and wifi_config_t are also cleared in reboot
-  // todo: create a new function to store in EEPROM/SPIFFS for this purpose
-  //Router_SSID = ESPAsync_wifiManager.WiFi_SSID();
-  //Router_Pass = ESPAsync_wifiManager.WiFi_Pass();
+  // create a new function to store in EEPROM/SPIFFS for this purpose
+  Router_SSID = ESPAsync_WiFiManager->WiFi_SSID();
+  Router_Pass = ESPAsync_WiFiManager->WiFi_Pass();
 
   ssid.toUpperCase();
   if ( (Router_SSID != "") && (Router_Pass != "") ) {
     LOGERROR3(F("* Add SSID = "), Router_SSID, F(", PW = "), Router_Pass);
     wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
-    ESPAsync_WiFiManager.setConfigPortalTimeout(120);
-    Serial.println("Got stored Credentials. Timeout 120s for Config Portal");
+    ESPAsync_WiFiManager->setConfigPortalTimeout(0);
+    Serial.println("Got stored Credentials.");
   } else {
     Serial.println("Open Config Portal without Timeout: No stored Credentials.");
     initialConfig = true;
@@ -513,7 +564,7 @@ void startConfigurationPanel() {
 
   if (initialConfig) {
     Serial.println("Starting configuration portal.");
-    if (!ESPAsync_WiFiManager.startConfigPortal((const char *) ssid.c_str(), password))
+    if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), password))
       Serial.println("Not connected to WiFi but continuing anyway.");
     else
       Serial.println("WiFi connected :D");
@@ -521,8 +572,8 @@ void startConfigurationPanel() {
     memset(&WM_config, 0, sizeof(WM_config));
     
     for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-      String tempSSID = ESPAsync_WiFiManager.getSSID(i);
-      String tempPW   = ESPAsync_WiFiManager.getPW(i);
+      String tempSSID = ESPAsync_WiFiManager->getSSID(i);
+      String tempPW   = ESPAsync_WiFiManager->getPW(i);
   
       if (strlen(tempSSID.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1)
         strcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str());
@@ -540,7 +591,7 @@ void startConfigurationPanel() {
       }
     }
 
-    ESPAsync_WiFiManager.getSTAStaticIPConfig(WM_STA_IPconfig);
+    ESPAsync_WiFiManager->getSTAStaticIPConfig(WM_STA_IPconfig);
     displayIPConfigStruct(WM_STA_IPconfig);
     saveConfigData();
   }
@@ -558,103 +609,50 @@ void startConfigurationPanel() {
     }
 
     if ( WiFi.status() != WL_CONNECTED ) {
-      Serial.println("ConnectMultiWiFi in setup");
+      Serial.println("ConnectMultiWiFi");
       connectMultiWiFi();
     }
   }
 
   Serial.print("After waiting ");
   Serial.print((float) (millis() - startedAt) / 1000L);
-  Serial.print(" secs more in setup(), connection result is ");
+  Serial.print(" secs more in loop(), connection result is ");
 
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("connected. Local IP: ");
     Serial.println(WiFi.localIP());
   } else
-    Serial.println(ESPAsync_WiFiManager.getStatus(WiFi.status()));
-}
-
-void requestConfigurationPanel(struct state *oldstate, struct state *state) {
-  if (state->is_requesting_cp != oldstate->is_requesting_cp &&
-      state->is_requesting_cp
-  ) {
-    ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-    ESPAsync_WiFiManager.setMinimumSignalQuality(-1);
-    ESPAsync_WiFiManager.setConfigPortalChannel(0);
-    ESPAsync_WiFiManager.setAPStaticIPConfig(WM_AP_IPconfig);
-
-#if !USE_DHCP_IP    
-  #if USE_CONFIGURABLE_DNS  
-    // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
-    ESPAsync_wifiManager.setSTAStaticIPConfig(stationIP, gatewayIP, netMask, dns1IP, dns2IP);  
-  #else
-    // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-    ESPAsync_wifiManager.setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
-  #endif 
-#endif  
-
-    Router_SSID = ESPAsync_WiFiManager.WiFi_SSID();
-    Router_Pass = ESPAsync_WiFiManager.WiFi_Pass();
-
-    if(!ESPAsync_WiFiManager.startConfigPortal((const char *)ssid.c_str(), password)) {
-      Serial.println("Not connected to WiFi but continuing anyway.");
-    } else {
-      Serial.println("connected :D");
-      Serial.print("Local IP: ");
-      Serial.println(WiFi.localIP());
-    }
-
-    if ( String(ESPAsync_WiFiManager.getSSID(0)) != "" && String(ESPAsync_WiFiManager.getSSID(1)) != "" ) {
-      memset(&WM_config, 0, sizeof(WM_config));
-      
-      for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-        String tempSSID = ESPAsync_WiFiManager.getSSID(i);
-        String tempPW   = ESPAsync_WiFiManager.getPW(i);
-    
-        if (strlen(tempSSID.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1)
-          strcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str());
-        else
-          strncpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1);
-    
-        if (strlen(tempPW.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1)
-          strcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str());
-        else
-          strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);  
-    
-        if ( (String(WM_config.WiFi_Creds[i].wifi_ssid) != "") && (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) ) {
-          LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw );
-          wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
-        }
-      }
-
-      saveConfigData();
-      state->is_requesting_cp = false;
-    }
-  }
+    Serial.println(ESPAsync_WiFiManager->getStatus(WiFi.status()));
 }
 
 void updateTouch(struct state *state) {
-  if (state->menu_mode == menuModeDisplay) {
-    if (batteryButton.wasPressed()) state->graph_mode = graphModeBatteryMah;
-    if (co2Button.wasPressed()) state->graph_mode = graphModeCo2;
-    if (midLeftButton.wasPressed()) state->graph_mode = graphModeTemperature;
-    if (midRightButton.wasPressed()) state->graph_mode = graphModeHumidity;
-  } else if (state->menu_mode == menuModeCalibration) {
-    if (midLeftButton.wasPressed()) {
-      state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
-    }
-    if (midRightButton.wasPressed()) {
-      state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
-    }
-    if (toggleAutoCalibrationButton.wasPressed()) {
+  if (state->menu_mode == menuModeGraphs) {
+    if (batteryButton.wasPressed()) 
+      state->graph_mode = graphModeBatteryMah;
+    if (co2Button.wasPressed()) 
+      state->graph_mode = graphModeCo2;
+    if (midLeftButton.wasPressed()) 
+      state->graph_mode = graphModeTemperature;
+    if (midRightButton.wasPressed()) 
+      state->graph_mode = graphModeHumidity;
+  } else if (state->menu_mode == menuModeCalibrationSettings) {
+    if (midLeftButton.wasPressed())
+      state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;   
+    if (midRightButton.wasPressed()) 
+      state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;    
+    if (toggleAutoCalButton.wasPressed()) {
       state->auto_calibration_on = !state->auto_calibration_on;
       airSensor.setAutoSelfCalibration(state->auto_calibration_on);
-      updateStateFile(state);
     } 
-    if (changeCalibrationButton.wasPressed()) {
+    if (submitCalibrationButton.wasPressed()) {
       airSensor.setForcedRecalibrationFactor(state->calibration_value);
-      state->menu_mode = menuModeDisplay;
-      updateStateFile(state);
+      state->menu_mode = menuModeGraphs;
+    }
+  } else if (state->menu_mode == menuModeWiFiSettings) {
+    if (toggleWiFiButton.wasPressed())
+      state->is_wifi_activated = !state->is_wifi_activated;
+    if (resetWiFiButton.wasPressed()) {
+      state->is_requesting_reset = true;
     }
   }
 
@@ -662,8 +660,29 @@ void updateTouch(struct state *state) {
     setDisplayPower(state->display_sleep);
     state->display_sleep = !state->display_sleep;
   }
-  if (M5.BtnB.wasPressed()) state->menu_mode = menuModeDisplay;
-  if (M5.BtnC.wasPressed()) state->menu_mode = menuModeCalibration;
+  if (M5.BtnB.wasPressed()) 
+    state->menu_mode = menuModeGraphs;
+  if (M5.BtnC.wasPressed()) {
+    switch (state->menu_mode){
+    case menuModeGraphs:
+      Serial.println("Calibration Menu");
+      state->menu_mode = menuModeCalibrationSettings;
+      break;
+
+    case menuModeCalibrationSettings:
+    Serial.println("WiFi Menu");
+      state->menu_mode = menuModeWiFiSettings;
+      break;
+    
+    case menuModeWiFiSettings:
+      Serial.println("Calibration Menu");
+      state->menu_mode = menuModeCalibrationSettings;
+      break;
+
+    default:
+      break;
+    }
+  }
 }
 
 void updateTime(struct state *state) {
@@ -697,20 +716,19 @@ void updateBattery(struct state *state) {
   if (state->in_ac && abs(state->battery_current) < 0.1 && state->battery_voltage >= 4.15 && abs(state->battery_mah - state->battery_capacity) > 1) {
     Serial.println("maximum found " + String(state->battery_mah));
     state->battery_capacity = state->battery_mah;
-    updateStateFile(state);
   }
 
   int batteryPercent = state->battery_mah * 100 / state->battery_capacity;
   batteryPercent = max(min(100, batteryPercent), 0);
 
-  Serial.println(
+  /*Serial.println(
     "mAh: " + String(state->battery_mah) + 
     " charged: " + String(columbCharged) + 
     " discharched: " + String(columbDischarged) + 
     " batteryPercent " + String(batteryPercent) + 
     " current " + state->battery_current  + 
     " voltage " + String(state->battery_voltage)
-  );
+  );*/
   state->battery_percent = batteryPercent;
   state->in_ac = M5.Axp.isACIN();
 }
@@ -795,19 +813,20 @@ void drawValues(struct state *oldstate, struct state *state) {
   DisbuffValue.setTextColor(co2color(state->co2_ppm));
 
   DisbuffValue.setTextSize(2);
-  DisbuffValue.drawString(String(state->co2_ppm) + "ppm", 160, 5);
-  DisbuffValue.setTextSize(1);
-
-  DisbuffValue.setTextColor(TFT_WHITE);
-  DisbuffValue.setFreeFont(&FreeMono18pt7b);
-
-  DisbuffValue.drawLine(0, 82, 320, 82, TFT_WHITE);
-  DisbuffValue.drawString(String(state->temperature_celsius / 10.0, 1) + "C", 80, 88);
-  DisbuffValue.drawString(String(state->humidity_percent / 10.0, 1) + "%", 240, 88);
-  DisbuffValue.drawLine(160, 82, 160, 116, TFT_WHITE);
-  DisbuffValue.drawLine(0, 116, 320, 116, TFT_WHITE);
+  DisbuffValue.drawString(String(state->co2_ppm) + "ppm", 160, 10);
 
   DisbuffValue.pushSprite(0, 26);
+
+  String temperature = String(state->temperature_celsius / 10.0, 1) + "C";
+  String humidity = String(state->humidity_percent / 10.0, 1) + "%";
+
+  hideButtons();
+  midLeftButton.setLabel(temperature.c_str());
+  midLeftButton.draw();
+  midRightButton.setLabel(humidity.c_str());
+  midRightButton.draw();
+  batteryButton.draw();
+  co2Button.draw();
 }
 
 void drawGraph(struct state *oldstate, struct state *state) {
@@ -883,7 +902,7 @@ void drawGraph(struct state *oldstate, struct state *state) {
   DisbuffGraph.pushSprite(0, 144);
 }
 
-void drawCalibration(struct state *oldstate, struct state *state) {
+void drawCalibrationSettings(struct state *oldstate, struct state *state) {
   if (state->display_sleep == oldstate->display_sleep &&
       state->calibration_value == oldstate->calibration_value &&
       state->auto_calibration_on == oldstate->auto_calibration_on &&
@@ -895,43 +914,95 @@ void drawCalibration(struct state *oldstate, struct state *state) {
 
   DisbuffBody.setFreeFont(&FreeMono18pt7b);
   DisbuffBody.setTextColor(TFT_WHITE);
-  DisbuffBody.drawString("CO2 Offset: ", 60, 5);
+  DisbuffBody.drawString("Calibration: ", 45, 5);
   
   DisbuffBody.setFreeFont(&FreeMonoBold12pt7b);
   DisbuffBody.setTextColor(co2color(state->calibration_value));
   DisbuffBody.setTextSize(2);
-  DisbuffBody.drawString(String(state->calibration_value) + "ppm", 80, 35);
+  DisbuffBody.drawString(String(state->calibration_value) + "ppm", 80, 30);
   DisbuffBody.setTextSize(1);
 
-  DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
-  DisbuffBody.setTextColor(TFT_WHITE);
-  DisbuffBody.drawLine(0, 80, 320, 80, TFT_WHITE);
-  DisbuffBody.drawString("-", 80, 86);
-  DisbuffBody.drawString("+", 240, 86);
-  DisbuffBody.drawLine(160, 80, 160, 120, TFT_WHITE);
-  DisbuffBody.drawLine(0, 120, 320, 120, TFT_WHITE);
-
-  uint16_t autoCalibrationColor = state->auto_calibration_on ? TFT_GREEN : TFT_RED; 
   DisbuffBody.setFreeFont(&FreeMono9pt7b);
+  DisbuffBody.setTextColor(TFT_WHITE);
   DisbuffBody.drawString("Enable Auto", 15, 150);
   DisbuffBody.drawString("Calibration", 15, 175);
-  DisbuffBody.setFreeFont(&FreeMono12pt7b);
-
-  DisbuffBody.setTextColor(autoCalibrationColor);
-  DisbuffBody.drawLine(160, 140, 220, 140, autoCalibrationColor);
-  DisbuffBody.drawLine(160, 140, 160, 190, autoCalibrationColor);
-  DisbuffBody.drawString(state->auto_calibration_on ? "On" : "Off", 170, 155);
-  DisbuffBody.drawLine(160, 190, 220, 190, autoCalibrationColor);
-  DisbuffBody.drawLine(220, 140, 220, 190, autoCalibrationColor);
-
-  DisbuffBody.setTextColor(TFT_CYAN);
-  DisbuffBody.drawLine(240, 140, 300, 140, TFT_CYAN);
-  DisbuffBody.drawLine(240, 140, 240, 190, TFT_CYAN);
-  DisbuffBody.drawString("Ok", 255, 155);
-  DisbuffBody.drawLine(240, 190, 300, 190, TFT_CYAN);
-  DisbuffBody.drawLine(300, 140, 300, 190, TFT_CYAN);
 
   DisbuffBody.pushSprite(0, 26);
+
+  hideButtons();
+  midLeftButton.setLabel("-");
+  midLeftButton.setFont(&FreeMonoBold12pt7b);
+  midLeftButton.draw();
+  midRightButton.setLabel("+");
+  midRightButton.setFont(&FreeMonoBold12pt7b);
+  midRightButton.draw();
+
+  toggleAutoCalButton.off = state->auto_calibration_on ? offGreen : offRed;
+  toggleAutoCalButton.on = state->auto_calibration_on ? onGreen : offGreen;
+  toggleAutoCalButton.setLabel(state->auto_calibration_on ? "ON" : "OFF");
+  toggleAutoCalButton.draw();
+  submitCalibrationButton.draw();
+}
+
+void drawWiFiSettings(struct state *oldstate, struct state *state) {
+  if (state->display_sleep == oldstate->display_sleep &&
+      state->is_wifi_activated == oldstate->is_wifi_activated &&
+      state->is_requesting_reset == oldstate->is_requesting_reset &&
+      state->wifi_status == oldstate->wifi_status &&
+      state->menu_mode == oldstate->menu_mode) {
+    return;
+  }
+
+  DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+  DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
+  DisbuffBody.setTextColor(WHITE);
+  DisbuffBody.setTextSize(2);
+  DisbuffBody.drawString("WiFi", 80, 20);
+
+  DisbuffBody.setFreeFont(&FreeMono9pt7b);
+  DisbuffBody.setTextSize(1);
+
+  if (state->is_requesting_reset || initialConfig) {
+    String wifiInfo = "Join " + (String)ssid; 
+    String ipInfo = "Open http://" + 
+                    (String)APStaticIP[0] + "." +
+                    (String)APStaticIP[1] + "." +
+                    (String)APStaticIP[2] + "." +
+                    (String)APStaticIP[3];
+    DisbuffBody.drawString(wifiInfo, 20, 80);
+    DisbuffBody.drawString(ipInfo, 20, 110);
+  }
+
+  if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED) {
+    DisbuffBody.setTextColor(RED);
+    DisbuffBody.drawString("Connection failed", 40, 90);
+  }
+
+  DisbuffBody.pushSprite(0, 26);
+
+  hideButtons();
+  toggleWiFiButton.off = state->is_wifi_activated ? offGreen : offRed;
+  toggleWiFiButton.on = state->is_wifi_activated ? onGreen : onRed;
+  toggleWiFiButton.setLabel(state->is_wifi_activated ? "ON" : "OFF");
+  toggleWiFiButton.draw();
+  
+  // to erase SSID/PW WiFi must run https://github.com/espressif/arduino-esp32/issues/400
+  if (state->is_wifi_activated && state->wifi_status == WL_CONNECTED) 
+    resetWiFiButton.draw();
+}
+
+void hideButtons() {
+  for (int i = 0; i < Button::instances.size(); i++) {
+    if (Button::instances[i]->getName() == M5.BtnA.getName() ||
+        Button::instances[i]->getName() == M5.BtnB.getName() ||
+        Button::instances[i]->getName() == M5.BtnC.getName() ||
+        Button::instances[i]->getName() == M5.background.getName()
+    ) {
+      continue;
+    }
+    Button::instances[i]->hide();
+  }
 }
 
 void clearBody(struct state *oldstate, struct state *state) {
@@ -960,7 +1031,7 @@ void writeSsd(struct state * state) {
     String(state->temperature_celsius / 10.0, 2) + "," + 
     String(state->humidity_percent / 10.0, 2) + "," +
     String(state->battery_mah) + "\r\n";
-  Serial.println(dataMessage);
+  //Serial.println(dataMessage);
   appendFile(SD, "/data.txt", dataMessage.c_str());
 }
 
@@ -1027,11 +1098,11 @@ void setTimeFromRtc() {
 
 // Append data to the SD card (DON'T MODIFY THIS FUNCTION)
 void appendFile(fs::FS & fs, const char * path, const char * message) {
-  Serial.printf("Appending to file: %s\n", path);
+  //Serial.printf("Appending to file: %s\n", path);
 
   File file = fs.open(path, FILE_APPEND);
   if (!file) {
-    Serial.println("Failed to open file for appending");
+    //Serial.println("Failed to open file for appending");
     return;
   }
   if (file.print(message)) {
