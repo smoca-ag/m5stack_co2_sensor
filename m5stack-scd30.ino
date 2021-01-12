@@ -263,6 +263,7 @@ void loop() {
 
   if (state.is_requesting_reset && state.wifi_status == WL_CONNECTED) {
     state.is_requesting_reset = false;
+    state.show_info = infoEmpty;
   }
 
   checkWiFiStatus();
@@ -571,7 +572,6 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     Serial.println("Got stored Credentials: " + Router_SSID);
   } else {
     Serial.println("Open Config Portal without Timeout: No stored Credentials.");
-    state.show_info = infoConfigPortalCredentials;
     initialConfig = true;
   }
 
@@ -666,6 +666,7 @@ void updateTouch(struct state *state) {
       state->is_wifi_activated = !state->is_wifi_activated;
     if (resetWiFiButton.wasPressed()) {
       state->is_requesting_reset = true;
+      state->show_info = infoConfigPortalCredentials;
     }
   }
 
