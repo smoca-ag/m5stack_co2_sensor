@@ -78,6 +78,12 @@ enum menuMode {
   menuModeWiFiSettings
 } ;
 
+enum info {
+  infoConfigPortalCredentials,
+  infoWiFiConnected,
+  infoEmpty
+} ;
+
 struct state {
   int co2_ppm;
   int temperature_celsius;
@@ -98,6 +104,7 @@ struct state {
   bool is_wifi_activated = false;
   bool is_requesting_reset = false;
   wl_status_t wifi_status = WL_DISCONNECTED;
+  enum info show_info = infoEmpty;
 } state;
 
 struct graph {
@@ -247,11 +254,14 @@ void loop() {
     startWiFiManager(&ESPAsync_WiFiManager);
   }
 
-  if (state.is_requesting_reset) {
+  if (state.is_requesting_reset && !oldstate.is_requesting_reset) {
+    Serial.println("Resetting WiFiManager");
     ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
     ESPAsync_WiFiManager.resetSettings();
-    ESPAsync_WiFiManager.resetSettings();
     startWiFiManager(&ESPAsync_WiFiManager);
+  }
+
+  if (state.is_requesting_reset && state.wifi_status == WL_CONNECTED) {
     state.is_requesting_reset = false;
   }
 
@@ -463,6 +473,7 @@ uint8_t connectMultiWiFi() {
     LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
     LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP() );
     Serial.println("WiFi Connected SSID: " + (String)WiFi.SSID());
+    state.show_info = infoWiFiConnected;
   }
   else {
     LOGERROR(F("WiFi not connected"));
@@ -476,6 +487,7 @@ void disconnectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     WiFi.disconnect(true);
     Serial.println("WiFi is disabled.");
+    state.show_info = infoEmpty;
   }
 }
 
@@ -545,20 +557,21 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
   #endif 
 #endif     
 
-  // can't use WiFi.SSID() in ESP32as it's only valid after connected.
-  // SSID and Password stored in ESP32 wifi_ap_record_t and wifi_config_t are also cleared in reboot
-  // create a new function to store in EEPROM/SPIFFS for this purpose
   Router_SSID = ESPAsync_WiFiManager->WiFi_SSID();
   Router_Pass = ESPAsync_WiFiManager->WiFi_Pass();
 
   ssid.toUpperCase();
-  if ( (Router_SSID != "") && (Router_Pass != "") ) {
+
+  // on esp32 resetting WiFiManager sets ssid/pw to "0"
+  if (Router_SSID != "" && Router_Pass != "" &&
+      Router_SSID != "0" && Router_Pass != "0") {
     LOGERROR3(F("* Add SSID = "), Router_SSID, F(", PW = "), Router_Pass);
     wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
     ESPAsync_WiFiManager->setConfigPortalTimeout(0);
-    Serial.println("Got stored Credentials.");
+    Serial.println("Got stored Credentials: " + Router_SSID);
   } else {
     Serial.println("Open Config Portal without Timeout: No stored Credentials.");
+    state.show_info = infoConfigPortalCredentials;
     initialConfig = true;
   }
 
@@ -566,8 +579,10 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     Serial.println("Starting configuration portal.");
     if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), password))
       Serial.println("Not connected to WiFi but continuing anyway.");
-    else
+    else {
       Serial.println("WiFi connected :D");
+      state.show_info == infoWiFiConnected;
+    }
 
     memset(&WM_config, 0, sizeof(WM_config));
     
@@ -608,10 +623,8 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
       }
     }
 
-    if ( WiFi.status() != WL_CONNECTED ) {
-      Serial.println("ConnectMultiWiFi");
+    if ( WiFi.status() != WL_CONNECTED ) 
       connectMultiWiFi();
-    }
   }
 
   Serial.print("After waiting ");
@@ -665,17 +678,14 @@ void updateTouch(struct state *state) {
   if (M5.BtnC.wasPressed()) {
     switch (state->menu_mode){
     case menuModeGraphs:
-      Serial.println("Calibration Menu");
       state->menu_mode = menuModeCalibrationSettings;
       break;
 
     case menuModeCalibrationSettings:
-    Serial.println("WiFi Menu");
       state->menu_mode = menuModeWiFiSettings;
       break;
     
     case menuModeWiFiSettings:
-      Serial.println("Calibration Menu");
       state->menu_mode = menuModeCalibrationSettings;
       break;
 
@@ -721,14 +731,14 @@ void updateBattery(struct state *state) {
   int batteryPercent = state->battery_mah * 100 / state->battery_capacity;
   batteryPercent = max(min(100, batteryPercent), 0);
 
-  /*Serial.println(
+  Serial.println(
     "mAh: " + String(state->battery_mah) + 
     " charged: " + String(columbCharged) + 
     " discharched: " + String(columbDischarged) + 
     " batteryPercent " + String(batteryPercent) + 
     " current " + state->battery_current  + 
     " voltage " + String(state->battery_voltage)
-  );*/
+  );
   state->battery_percent = batteryPercent;
   state->in_ac = M5.Axp.isACIN();
 }
@@ -866,13 +876,6 @@ void drawGraph(struct state *oldstate, struct state *state) {
   }
 
   std::sort(sorted, sorted + value_count);
-  /*  Serial.print("[");
-
-    for (i = 0; i < value_count; i++) {
-      float value = sorted[i];
-      Serial.print(String(value) + ", ");
-    }
-    Serial.println("]");*/
 
   int skip = GRAPH_UNITS * 2.5 / 100;
   float min_value = sorted[value_count > 10 * skip ? skip : 0];
@@ -949,6 +952,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
       state->is_wifi_activated == oldstate->is_wifi_activated &&
       state->is_requesting_reset == oldstate->is_requesting_reset &&
       state->wifi_status == oldstate->wifi_status &&
+      state->show_info == oldstate->show_info &&
       state->menu_mode == oldstate->menu_mode) {
     return;
   }
@@ -963,15 +967,18 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
   DisbuffBody.setFreeFont(&FreeMono9pt7b);
   DisbuffBody.setTextSize(1);
 
-  if (state->is_requesting_reset || initialConfig) {
+  if (state->show_info == infoConfigPortalCredentials) {
     String wifiInfo = "Join " + (String)ssid; 
     String ipInfo = "Open http://" + 
                     (String)APStaticIP[0] + "." +
                     (String)APStaticIP[1] + "." +
                     (String)APStaticIP[2] + "." +
                     (String)APStaticIP[3];
-    DisbuffBody.drawString(wifiInfo, 20, 80);
+    DisbuffBody.drawString(wifiInfo, 25, 85);
     DisbuffBody.drawString(ipInfo, 20, 110);
+  } else if (state->show_info == infoWiFiConnected) {
+    String connectedInfo = "Connected: " + ((Router_SSID.length() > 15) ? (Router_SSID.substring(0, 14) + "...") : Router_SSID);
+    DisbuffBody.drawString( connectedInfo, 40, 90);
   }
 
   if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED) {
@@ -1031,7 +1038,7 @@ void writeSsd(struct state * state) {
     String(state->temperature_celsius / 10.0, 2) + "," + 
     String(state->humidity_percent / 10.0, 2) + "," +
     String(state->battery_mah) + "\r\n";
-  //Serial.println(dataMessage);
+    Serial.println(dataMessage);
   appendFile(SD, "/data.txt", dataMessage.c_str());
 }
 
@@ -1098,11 +1105,11 @@ void setTimeFromRtc() {
 
 // Append data to the SD card (DON'T MODIFY THIS FUNCTION)
 void appendFile(fs::FS & fs, const char * path, const char * message) {
-  //Serial.printf("Appending to file: %s\n", path);
+  Serial.printf("Appending to file: %s\n", path);
 
   File file = fs.open(path, FILE_APPEND);
   if (!file) {
-    //Serial.println("Failed to open file for appending");
+    Serial.println("Failed to open file for appending");
     return;
   }
   if (file.print(message)) {
