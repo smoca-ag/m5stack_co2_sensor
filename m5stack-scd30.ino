@@ -81,6 +81,8 @@ enum menuMode {
 enum info {
   infoConfigPortalCredentials,
   infoWiFiConnected,
+  infoWiFiFailed,
+  infoWiFiLost,
   infoEmpty
 } ;
 
@@ -225,7 +227,19 @@ void loop() {
   updateGraph(&oldstate, &state);
   updateLed(&oldstate, &state);
   updateStateFile(&oldstate, &state);
+
   state.wifi_status = WiFi.status();
+  if (state.wifi_status == WL_CONNECTED)
+    state.show_info = infoWiFiConnected;
+  else if (state.wifi_status == WL_CONNECT_FAILED)
+    state.show_info = infoWiFiFailed;
+  else if (state.wifi_status == WL_DISCONNECTED)
+    state.show_info = infoEmpty;
+  else if (state.wifi_status == WL_CONNECTION_LOST)
+    state.show_info = infoWiFiLost;
+
+  if (state.is_requesting_reset)
+    state.show_info = infoConfigPortalCredentials;
 
   if (!state.display_sleep) {
     drawHeader(&oldstate, &state);
@@ -254,16 +268,12 @@ void loop() {
     startWiFiManager(&ESPAsync_WiFiManager);
   }
 
+  // issue: wifiMulti APs are not being reset.
   if (state.is_requesting_reset && !oldstate.is_requesting_reset) {
-    Serial.println("Resetting WiFiManager");
     ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
     ESPAsync_WiFiManager.resetSettings();
     startWiFiManager(&ESPAsync_WiFiManager);
-  }
-
-  if (state.is_requesting_reset && state.wifi_status == WL_CONNECTED) {
     state.is_requesting_reset = false;
-    state.show_info = infoEmpty;
   }
 
   checkWiFiStatus();
@@ -474,7 +484,6 @@ uint8_t connectMultiWiFi() {
     LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
     LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP() );
     Serial.println("WiFi Connected SSID: " + (String)WiFi.SSID());
-    state.show_info = infoWiFiConnected;
   }
   else {
     LOGERROR(F("WiFi not connected"));
@@ -570,6 +579,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
     ESPAsync_WiFiManager->setConfigPortalTimeout(0);
     Serial.println("Got stored Credentials: " + Router_SSID);
+    initialConfig = false;
   } else {
     Serial.println("Open Config Portal without Timeout: No stored Credentials.");
     initialConfig = true;
@@ -636,6 +646,8 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     Serial.println(WiFi.localIP());
   } else
     Serial.println(ESPAsync_WiFiManager->getStatus(WiFi.status()));
+
+  initialConfig = false;
 }
 
 void updateTouch(struct state *state) {
@@ -666,7 +678,6 @@ void updateTouch(struct state *state) {
       state->is_wifi_activated = !state->is_wifi_activated;
     if (resetWiFiButton.wasPressed()) {
       state->is_requesting_reset = true;
-      state->show_info = infoConfigPortalCredentials;
     }
   }
 
@@ -968,7 +979,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
   DisbuffBody.setFreeFont(&FreeMono9pt7b);
   DisbuffBody.setTextSize(1);
 
-  if (state->show_info == infoConfigPortalCredentials) {
+  if (state->show_info == infoConfigPortalCredentials || initialConfig) {
     String wifiInfo = "Join " + (String)ssid; 
     String ipInfo = "Open http://" + 
                     (String)APStaticIP[0] + "." +
@@ -980,9 +991,10 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
   } else if (state->show_info == infoWiFiConnected) {
     String connectedInfo = "Connected: " + ((Router_SSID.length() > 15) ? (Router_SSID.substring(0, 14) + "...") : Router_SSID);
     DisbuffBody.drawString( connectedInfo, 40, 90);
-  }
-
-  if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED) {
+  } else if (state->show_info == infoWiFiLost) {
+    DisbuffBody.setTextColor(YELLOW);
+    DisbuffBody.drawString("Connection lost", 40, 90);
+  } else if (state->show_info == infoWiFiFailed) {
     DisbuffBody.setTextColor(RED);
     DisbuffBody.drawString("Connection failed", 40, 90);
   }
