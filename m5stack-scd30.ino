@@ -567,7 +567,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
   ssid.toUpperCase();
 
   // on esp32 resetting WiFiManager sets ssid/pw to "0"
-  if (Router_SSID != "" && Router_Pass != "" &&
+  if (Router_SSID != "" && Router_Pass != "" ||
       Router_SSID != "0" && Router_Pass != "0") {
     LOGERROR3(F("* Add SSID = "), Router_SSID, F(", PW = "), Router_Pass);
     wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
