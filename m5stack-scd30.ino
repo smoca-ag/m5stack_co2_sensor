@@ -263,23 +263,23 @@ void createSprites() {
   DisbuffHeader.createSprite(320, 26);
   DisbuffHeader.setFreeFont(&FreeMono9pt7b);
   DisbuffHeader.setTextSize(1);
-  DisbuffHeader.setTextColor(TFT_WHITE);
+  DisbuffHeader.setTextColor(WHITE);
   DisbuffHeader.setTextDatum(TL_DATUM);
-  DisbuffHeader.fillRect(0, 0, 320, 25, TFT_BLACK);
-  DisbuffHeader.drawLine(0, 25, 320, 25, TFT_WHITE);
+  DisbuffHeader.fillRect(0, 0, 320, 25, BLACK);
+  DisbuffHeader.drawLine(0, 25, 320, 25, WHITE);
 
   DisbuffValue.createSprite(320, 117);
   DisbuffValue.setTextSize(1);
-  DisbuffValue.setTextColor(TFT_WHITE);
+  DisbuffValue.setTextColor(WHITE);
   DisbuffValue.setTextDatum(TC_DATUM);
-  DisbuffValue.fillRect(0, 0, 320, 116, TFT_BLACK);
+  DisbuffValue.fillRect(0, 0, 320, 116, BLACK);
 
   DisbuffGraph.createSprite(320, 97);
   DisbuffGraph.setFreeFont(&FreeMono9pt7b);
   DisbuffGraph.setTextSize(1);
-  DisbuffGraph.setTextColor(TFT_WHITE);
+  DisbuffGraph.setTextColor(WHITE);
   DisbuffGraph.setTextDatum(TC_DATUM);
-  DisbuffGraph.fillRect(0, 0, 320, 97, TFT_BLACK);
+  DisbuffGraph.fillRect(0, 0, 320, 97, BLACK);
 
   DisbuffBody.createSprite(320, 214);
 }
@@ -378,7 +378,7 @@ void initAirSensor() {
 
   if (airSensor.begin(Wire, state.auto_calibration_on) == false)
   {
-    DisbuffValue.setTextColor(TFT_RED);
+    DisbuffValue.setTextColor(RED);
     Serial.println("Air sensor not detected. Please check wiring. Freezing...");
     DisbuffValue.drawString("Air sensor not detected.", 0, 0);
     DisbuffValue.drawString("Please check wiring.", 0, 25);
@@ -820,28 +820,28 @@ void drawHeader(struct state *oldstate, struct state *state) {
     return;
   }
 
-  DisbuffHeader.fillRect(0, 0, 320, 24, TFT_BLACK);
+  DisbuffHeader.fillRect(0, 0, 320, 24, BLACK);
   char strftime_buf[64];
   strftime(strftime_buf, sizeof(strftime_buf) - 1, "%c", &(state->current_time));
   DisbuffHeader.drawString(String(strftime_buf), 0, 1);
   DisbuffHeader.setTextDatum(TR_DATUM);
   DisbuffHeader.drawString(  String(state->battery_percent) + "%" + (state->in_ac ? "+" : "-"), 320, 0);
   DisbuffHeader.setTextDatum(TL_DATUM);
-  DisbuffHeader.drawLine(0, 25, 320, 25, TFT_WHITE);
+  DisbuffHeader.drawLine(0, 25, 320, 25, WHITE);
   DisbuffHeader.pushSprite(0, 0);
 }
 
 uint16_t co2color(int value) {
   if (value < 600) {
-    return TFT_CYAN;
+    return CYAN;
   } else if (value < 800) {
-    return TFT_GREEN;
+    return GREEN;
   } else if (value < 1000) {
-    return TFT_YELLOW;
+    return YELLOW;
   } else if (value < 1400) {
-    return TFT_ORANGE;
+    return ORANGE;
   } else {
-    return TFT_RED;
+    return RED;
   }
 }
 
@@ -855,7 +855,7 @@ void drawValues(struct state *oldstate, struct state *state) {
     return;
   }
 
-  DisbuffValue.fillRect(0, 0, 320, 116, TFT_BLACK);
+  DisbuffValue.fillRect(0, 0, 320, 116, BLACK);
   DisbuffValue.setFreeFont(&FreeMonoBold18pt7b);
   DisbuffValue.setTextColor(co2color(state->co2_ppm));
 
@@ -884,7 +884,7 @@ void drawGraph(struct state *oldstate, struct state *state) {
     return;
   }
 
-  DisbuffGraph.fillRect(0, 0, 320, 97, TFT_BLACK);
+  DisbuffGraph.fillRect(0, 0, 320, 97, BLACK);
 
   float *values = graph.co2;
   if (state->graph_mode == graphModeBatteryMah) {
@@ -931,7 +931,7 @@ void drawGraph(struct state *oldstate, struct state *state) {
     if (!isnan(value)) {
       int y = min(max(96 - int(factor * (value - min_value)), 0), 96);
       int x = 320 - (((state->graph_index - i) % GRAPH_UNITS + GRAPH_UNITS) % GRAPH_UNITS);
-      uint16_t color = state->graph_mode == graphModeCo2 ? co2color(value) : TFT_WHITE;
+      uint16_t color = state->graph_mode == graphModeCo2 ? co2color(value) : WHITE;
       for (int j = y ; j < 96 ; j++) {
         DisbuffGraph.drawPixel(x, j, color);
       }
@@ -950,10 +950,10 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
     return;
   }
 
-  DisbuffBody.fillRect(0, 0, 320, 214, TFT_BLACK);
+  DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 
   DisbuffBody.setFreeFont(&FreeMono18pt7b);
-  DisbuffBody.setTextColor(TFT_WHITE);
+  DisbuffBody.setTextColor(WHITE);
   DisbuffBody.drawString("Calibration: ", 45, 5);
   
   DisbuffBody.setFreeFont(&FreeMonoBold12pt7b);
@@ -963,7 +963,7 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
   DisbuffBody.setTextSize(1);
 
   DisbuffBody.setFreeFont(&FreeMono9pt7b);
-  DisbuffBody.setTextColor(TFT_WHITE);
+  DisbuffBody.setTextColor(WHITE);
   DisbuffBody.drawString("Enable Auto", 15, 150);
   DisbuffBody.drawString("Calibration", 15, 175);
 
