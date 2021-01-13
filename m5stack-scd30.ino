@@ -38,6 +38,8 @@
 
 #include "Logo.h"
 
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
+
 #define NUM_WIFI_CREDENTIALS 1
 #define MAX_SSID_LEN 32
 #define MAX_PW_LEN 64
@@ -1061,6 +1063,7 @@ void hideButtons() {
 }
 
 void clearBody(struct state *oldstate, struct state *state) {
+  hideButtons();
   if (oldstate->menu_mode != state->menu_mode) {
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
     DisbuffBody.pushSprite(0, 26);
