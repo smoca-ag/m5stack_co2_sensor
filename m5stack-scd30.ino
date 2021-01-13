@@ -107,6 +107,7 @@ struct state {
   bool is_requesting_reset = false;
   wl_status_t wifi_status = WL_DISCONNECTED;
   enum info show_info = infoEmpty;
+  String password;
 } state;
 
 struct graph {
@@ -142,8 +143,6 @@ TFT_eSprite DisbuffGraph  = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffBody   = TFT_eSprite(&M5.Lcd);
 
 String ssid               = "smoca CO2-" + String(ESP_getChipId(), HEX);
-String password;
-
 IPAddress stationIP       = IPAddress(0, 0, 0, 0);
 IPAddress gatewayIP       = IPAddress(192, 168, 2, 1);
 IPAddress netMask         = IPAddress(255, 255, 255, 0);
@@ -179,7 +178,6 @@ float my_nan;
 void setup() {
   Serial.println("Start Setup.");
   my_nan = sqrt(-1);
-  password = randomPassword(8);
 
   M5.begin();
   M5.Lcd.setSwapBytes(true);
@@ -227,6 +225,7 @@ void loop() {
   updateCo2(&state);
   updateGraph(&oldstate, &state);
   updateLed(&oldstate, &state);
+  updatePassword(&state);
   updateStateFile(&oldstate, &state);
   updateWiFiState(&state);
 
@@ -292,6 +291,7 @@ void loadPersistentState() {
     String auto_cal_string = file.readStringUntil('\n');
     String calibration_string = file.readStringUntil('\n');
     String is_wifi_activated = file.readStringUntil('\n');
+    String password = file.readStringUntil('\n');
     file.close();
 
     if (battery_string.length() > 0) {
@@ -304,6 +304,7 @@ void loadPersistentState() {
     state.auto_calibration_on = auto_cal_string == "1" ? true : false;
     state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
     state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
+    state.password = password;
   } else {
     Serial.println("state file could not be read.");
   }
@@ -313,7 +314,8 @@ void updateStateFile(struct state *oldstate, struct state *state) {
   if (state->battery_capacity == oldstate->battery_capacity &&
       state->auto_calibration_on == oldstate->auto_calibration_on &&
       state->calibration_value == oldstate->calibration_value &&
-      state->is_wifi_activated == oldstate->is_wifi_activated) {
+      state->is_wifi_activated == oldstate->is_wifi_activated &&
+      state->password == oldstate->password) {
         return;
       }
 
@@ -322,7 +324,8 @@ void updateStateFile(struct state *oldstate, struct state *state) {
     (String)state->battery_capacity + "\n" +
     (String)state->auto_calibration_on + "\n" +
     (String)state->calibration_value + "\n" +
-    (String)state->is_wifi_activated + "\n"
+    (String)state->is_wifi_activated + "\n" +
+    state->password + "\n"
   );
   f.close();
 }
@@ -578,7 +581,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
 
   if (initialConfig) {
     Serial.println("Starting configuration portal.");
-    if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) password.c_str()))
+    if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state.password.c_str()))
       Serial.println("Not connected to WiFi but continuing anyway.");
     else {
       Serial.println("WiFi connected :D");
@@ -676,8 +679,6 @@ void updateTouch(struct state *state) {
     setDisplayPower(state->display_sleep);
     state->display_sleep = !state->display_sleep;
   }
-  if (M5.BtnB.wasPressed()) 
-    state->menu_mode = menuModeGraphs;
   if (M5.BtnC.wasPressed()) {
     switch (state->menu_mode){
     case menuModeGraphs:
@@ -689,7 +690,7 @@ void updateTouch(struct state *state) {
       break;
     
     case menuModeWiFiSettings:
-      state->menu_mode = menuModeCalibrationSettings;
+      state->menu_mode = menuModeGraphs;
       break;
 
     default:
@@ -774,6 +775,13 @@ void updateCo2(struct state *state) {
     state->co2_ppm = airSensor.getCO2();
     state->temperature_celsius = airSensor.getTemperature() * 10;
     state->humidity_percent = airSensor.getHumidity() * 10;
+  }
+}
+
+void updatePassword(struct state *state) {
+  if (state->password == "" ) {
+    state->password = randomPassword(8);
+    Serial.println(state->password);
   }
 }
 
@@ -1005,15 +1013,16 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
   DisbuffBody.setTextSize(1);
 
   if (state->show_info == infoConfigPortalCredentials || initialConfig) {
-    String wifiInfo = "Join " + (String)ssid; 
-    String ipInfo = "Open http://" + 
-                    (String)APStaticIP[0] + "." +
-                    (String)APStaticIP[1] + "." +
-                    (String)APStaticIP[2] + "." +
-                    (String)APStaticIP[3];
+    String wifiInfo = "Join " + ssid; 
+    String ipInfo   = "Open http://" + 
+                      (String)APStaticIP[0] + "." +
+                      (String)APStaticIP[1] + "." +
+                      (String)APStaticIP[2] + "." +
+                      (String)APStaticIP[3];
+    String pwInfo   = "Password: " + state->password;
     DisbuffBody.drawString(wifiInfo, 25, 75);
-    DisbuffBody.drawString(password, 120, 95);
-    DisbuffBody.drawString(ipInfo, 20, 105);
+    DisbuffBody.drawString(pwInfo, 40, 95);
+    DisbuffBody.drawString(ipInfo, 20, 115);
   } else if (state->show_info == infoWiFiConnected) {
     String connectedInfo = "Connected: " + ((Router_SSID.length() > 15) ? (Router_SSID.substring(0, 14) + "...") : Router_SSID);
     DisbuffBody.drawString( connectedInfo, 40, 90);
