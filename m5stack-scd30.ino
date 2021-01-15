@@ -428,8 +428,8 @@ void checkWiFiStatus() {
 }
 
 void checkWiFi() {
-  if ( (WiFi.status() != WL_CONNECTED && state.is_wifi_activated) ) {
-    Serial.println("WiFi lost. Trying to reconnect. Status: " + (String)WiFi.status());
+  if ( (state.wifi_status != WL_CONNECTED && state.is_wifi_activated) ) {
+    Serial.println("WiFi lost. Trying to reconnect. Status: " + (String)state.wifi_status);
     if (connectMultiWiFi() != WL_CONNECTED) {
       Serial.println("WiFi turned off.");
       state.is_wifi_activated = false;
@@ -545,7 +545,7 @@ void handleWiFi(struct state *oldstate, struct state *state) {
   if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
     state->is_wifi_activated = false;
 
-  if (!state->is_wifi_activated && state->wifi_status != WL_DISCONNECTED)
+  if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
     disconnectWiFi(true, false);
 
   if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED) {
@@ -585,7 +585,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
       }
     }
 
-    if (WiFi.status() != WL_CONNECTED && state.is_wifi_activated)
+    if (state.wifi_status != WL_CONNECTED && state.is_wifi_activated)
       connectMultiWiFi();
   } else {
     Serial.println("No Credentials.");
@@ -594,7 +594,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
       Serial.println("Not connected to WiFi but continuing anyway.");
     } else {
       Serial.println("WiFi connected :D");
-      Serial.println("WiFi Status: " + (String)WiFi.status());
+      Serial.println("WiFi Status: " + (String)state.wifi_status);
       Serial.println("WiFi activated: " + (String)state.is_wifi_activated);
     }
 
@@ -605,11 +605,11 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
   Serial.print((float) (millis() - startedAt) / 1000L);
   Serial.print(" secs more in loop(), connection result is ");
 
-  if (state.is_wifi_activated && WiFi.status() == WL_CONNECTED) {
+  if (state.is_wifi_activated && state.wifi_status == WL_CONNECTED) {
     Serial.print("connected. Local IP: ");
     Serial.println(WiFi.localIP());
   } else
-    Serial.println(ESPAsync_WiFiManager->getStatus(WiFi.status()));
+    Serial.println(ESPAsync_WiFiManager->getStatus(state.wifi_status));
 }
 
 void reset(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
