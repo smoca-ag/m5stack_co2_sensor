@@ -590,6 +590,9 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
   } else {
     Serial.println("No Credentials.");
     Serial.println("Start Configuration Portal.");
+
+    // TODO: SHOW UI HERE
+
     if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state.password.c_str())) {
       Serial.println("Not connected to WiFi but continuing anyway.");
     } else {
@@ -1075,7 +1078,8 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.drawString(pwInfo, 40, 95);
     DisbuffBody.drawString(ipInfo, 20, 115);
   } else if (state->show_info == infoWiFiConnected) {
-    String connectedInfo = "Connected: " + ((Router_SSID.length() > 15) ? (Router_SSID.substring(0, 14) + "...") : Router_SSID);
+    String connectedTo = (String)WiFi.SSID();
+    String connectedInfo = "Connected: " + ((connectedTo.length() > 15) ? (connectedTo.substring(0, 14) + "...") : connectedTo);
     DisbuffBody.drawString( connectedInfo, 40, 90);
   } else if (state->show_info == infoWiFiLost) {
     DisbuffBody.setTextColor(YELLOW);
