@@ -360,7 +360,7 @@ void initWiFi() {
   if (!isValid) {
     Serial.println("Disconnect WiFi in setup()");
     state.is_wifi_activated = false;
-    disconnectWiFi();
+    disconnectWiFi(true, false);
   }
 }
 
@@ -429,10 +429,9 @@ void checkWiFiStatus() {
 
 void checkWiFi() {
   if ( (WiFi.status() != WL_CONNECTED && state.is_wifi_activated) ) {
-    Serial.println("WiFi lost. Trying to reconnect.");
-    connectMultiWiFi();
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("Cannot connect to WiFi.");
+    Serial.println("WiFi lost. Trying to reconnect. Status: " + (String)WiFi.status());
+    if (connectMultiWiFi() != WL_CONNECTED) {
+      Serial.println("WiFi turned off.");
       state.is_wifi_activated = false;
     }
   }
@@ -482,19 +481,15 @@ uint8_t connectMultiWiFi() {
     Serial.println("WiFi Connected SSID: " + (String)WiFi.SSID());
   }
   else {
-    LOGERROR(F("WiFi not connected"));
-    Serial.println("WiFi not connected");
+    LOGERROR3(F("WiFi not connected."), " ", "Status: ", (String)status);
   }
 
   return status;
 }
 
-void disconnectWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    WiFi.disconnect(true);
-    Serial.println("WiFi is disabled.");
-    state.show_info = infoEmpty;
-  }
+void disconnectWiFi(bool wifiOff, bool eraseAP) {
+  WiFi.disconnect(wifiOff, eraseAP);
+  Serial.println("WiFi is disabled.");
 }
 
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
@@ -550,19 +545,17 @@ void handleWiFi(struct state *oldstate, struct state *state) {
   if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
     state->is_wifi_activated = false;
 
-  if (!state->is_wifi_activated && oldstate->is_wifi_activated)
-    disconnectWiFi();
+  if (!state->is_wifi_activated && state->wifi_status != WL_DISCONNECTED)
+    disconnectWiFi(true, false);
 
-  if (state->is_wifi_activated && !oldstate->is_wifi_activated) {
-    if (!areRouterCredentialsValid()) {
-      ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-      startWiFiManager(&ESPAsync_WiFiManager);
-    }
+  if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED) {
+    ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
+    startWiFiManager(&ESPAsync_WiFiManager);
   }
 
   // issue: wifiMulti APs are not being reset.
   if (state->is_requesting_reset && !oldstate->is_requesting_reset) {
-    disconnectWiFi();
+    disconnectWiFi(true, true);
     state->is_wifi_activated = false;
     ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
     reset(&ESPAsync_WiFiManager);
