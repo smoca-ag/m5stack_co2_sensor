@@ -46,8 +46,9 @@ To initialise the device do the following:
 1. Install Arduino studio
 2. Install the following libraries:
  * version 0.0.2 of the M5Core2 library via [GitHub](https://github.com/m5stack/M5Core2)
+ * version 1.0.10 of SCD30 library via [GitHub](https://github.com/sparkfun/SparkFun_SCD30_Arduino_Library)
  * esp32 board description via additional board manager urls in the Arduino IDE: https://github.com/espressif/arduino-esp32/releases/download/1.0.5-rc4/package_esp32_dev_index.json 
- * ESPAsync WiFiManager via [GitHub](https://github.com/khoih-prog/ESPAsync_WiFiManager)
+ * version 1.4.1 of ESPAsync WiFiManager library via [GitHub](https://github.com/khoih-prog/ESPAsync_WiFiManager)
  * ESPAsync WebServer via [GitHub](https://github.com/me-no-dev/ESPAsyncWebServer)
  * AsyncTCP via [GitHub](https://github.com/me-no-dev/AsyncTCP)
 3. Set the RTC of the device via ntp: adjust password.h to contain your wifi, run the set_rtc sketch
