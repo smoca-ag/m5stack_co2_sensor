@@ -550,20 +550,21 @@ void handleWiFi(struct state *oldstate, struct state *state) {
 
   if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED) {
     ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-    startWiFiManager(&ESPAsync_WiFiManager);
+    startWiFiManager(&ESPAsync_WiFiManager, oldstate, state);
   }
 
-  // issue: wifiMulti APs are not being reset.
   if (state->is_requesting_reset && !oldstate->is_requesting_reset) {
     disconnectWiFi(true, true);
     state->is_wifi_activated = false;
     ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-    reset(&ESPAsync_WiFiManager);
+    resetWiFiManager(&ESPAsync_WiFiManager);
     state->is_requesting_reset = false;
   }
 }
 
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
+void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
+                      struct state *oldstate,
+                      struct state *state) {
   unsigned long startedAt = millis();
   setupWiFiManager(ESPAsync_WiFiManager);
 
@@ -585,20 +586,21 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
       }
     }
 
-    if (state.wifi_status != WL_CONNECTED && state.is_wifi_activated)
+    if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated)
       connectMultiWiFi();
   } else {
     Serial.println("No Credentials.");
     Serial.println("Start Configuration Portal.");
 
-    // TODO: SHOW UI HERE
+    state->show_info = infoConfigPortalCredentials;
+    drawScreen(oldstate, state);
 
-    if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state.password.c_str())) {
+    if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str())) {
       Serial.println("Not connected to WiFi but continuing anyway.");
     } else {
       Serial.println("WiFi connected :D");
-      Serial.println("WiFi Status: " + (String)state.wifi_status);
-      Serial.println("WiFi activated: " + (String)state.is_wifi_activated);
+      Serial.println("WiFi Status: " + (String)state->wifi_status);
+      Serial.println("WiFi activated: " + (String)state->is_wifi_activated);
     }
 
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
@@ -608,14 +610,14 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
   Serial.print((float) (millis() - startedAt) / 1000L);
   Serial.print(" secs more in loop(), connection result is ");
 
-  if (state.is_wifi_activated && state.wifi_status == WL_CONNECTED) {
+  if (state->is_wifi_activated && state->wifi_status == WL_CONNECTED) {
     Serial.print("connected. Local IP: ");
     Serial.println(WiFi.localIP());
   } else
-    Serial.println(ESPAsync_WiFiManager->getStatus(state.wifi_status));
+    Serial.println(ESPAsync_WiFiManager->getStatus(state->wifi_status));
 }
 
-void reset(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
+void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
   Router_SSID = "";
   Router_Pass = "";
   ESPAsync_WiFiManager->resetSettings();
