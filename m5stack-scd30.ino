@@ -360,7 +360,6 @@ void initWiFi() {
   if (!isValid) {
     Serial.println("Disconnect WiFi in setup()");
     state.is_wifi_activated = false;
-    updateStateFile();
     disconnectWiFi();
   }
 }
