@@ -43,16 +43,10 @@ Note: The optional battery increases the battery operation time from 6 to 10 hou
 ## Software
 
 To initialise the device do the following:
-1. Install Arduino studio
-2. Install the following libraries:
- * version 0.0.2 of the M5Core2 library via [GitHub](https://github.com/m5stack/M5Core2)
- * version 1.0.10 of SCD30 library via [GitHub](https://github.com/sparkfun/SparkFun_SCD30_Arduino_Library)
- * esp32 board description via additional board manager urls in the Arduino IDE: https://github.com/espressif/arduino-esp32/releases/download/1.0.5-rc4/package_esp32_dev_index.json 
- * version 1.4.1 of ESPAsync WiFiManager library via [GitHub](https://github.com/khoih-prog/ESPAsync_WiFiManager)
- * ESPAsync WebServer via [GitHub](https://github.com/me-no-dev/ESPAsyncWebServer)
- * AsyncTCP via [GitHub](https://github.com/me-no-dev/AsyncTCP)
-3. Set the RTC of the device via ntp: adjust password.h to contain your wifi, run the set_rtc sketch
-4. Flash the m5stack-scd30 sketch
+1. Install [Platformio IDE](https://platformio.org/platformio-ide)
+2. Open the ```co2-Sensor``` project folder
+3. Run ```pio lib install``` in PlatformIO CLI to install dependencies
+4. Flash the ```main.cpp``` script to your M5 Stack Core 2
 
 ## Usage
 
