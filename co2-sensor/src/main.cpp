@@ -190,6 +190,63 @@ int target_fps = 20;
 int frame_duration_ms = 1000 / target_fps;
 float my_nan;
 
+String randomPassword();
+void loadStateFile();
+void saveStateFile();
+void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig);
+void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig);
+void initWiFi();
+void initSD();
+void initAirSensor();
+void checkWiFiStatus();
+void checkWiFi();
+uint8_t connectMultiWiFi();
+void disconnectWiFi(bool wifiOff, bool eraseAP);
+void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
+void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);
+void loadConfigData();
+void saveConfigData();
+void handleWiFi(struct state *oldstate, struct state *state);
+void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state);
+void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+bool areRouterCredentialsValid();
+void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+void updateTouch(struct state *state);
+void updateTime(struct state *state);
+void updateBattery(struct state *state);
+void updateCo2(struct state *state);
+void updateGraph(struct state *oldstate, struct state *state);
+void updateLed(struct state *oldstate, struct state *state);
+void updatePassword(struct state *state);
+void saveStateFile(struct state *oldstate, struct state *state);
+void updateWiFiState(struct state *oldstate, struct state *state);
+void updateTimeState(struct state *oldstate, struct state *state);
+void createSprites();
+uint16_t co2color(int value);
+void drawScreen(struct state *oldstate, struct state *state);
+void drawHeader(struct state *oldstate, struct state *state);
+void drawValues(struct state *oldstate, struct state *state);
+void drawGraph(struct state *oldstate, struct state *state);
+void drawCalibrationSettings(struct state *oldstate, struct state *state);
+void drawWiFiSettings(struct state *oldstate, struct state *state);
+void drawTimeSettings(struct state *oldstate, struct state *state);
+void hideButtons();
+void clearScreen(struct state *oldstate, struct state *state);
+void syncTime(struct state *state);
+void writeSsd(struct state * state);
+String padTwo(String input);
+void writeFile(fs::FS & fs, const char * path, const char * message);
+void printTime();
+void syncTime(struct state *state);
+void setRtc(struct state *state);
+void setTimeFromRtc();
+void appendFile(fs::FS & fs, const char * path, const char * message);
+void setDisplayPower(bool state);
+uint32_t Read32bit(uint8_t Addr);
+uint32_t ReadByte(uint8_t Addr);
+void WriteByte(uint8_t Addr, uint8_t Data);
+
 void setup() {
   Serial.println("Start Setup.");
   my_nan = sqrt(-1);
@@ -281,31 +338,6 @@ String randomPassword(int length) {
   }
 
   return pwd;
-}
-
-void createSprites() {
-  DisbuffHeader.createSprite(320, 26);
-  DisbuffHeader.setFreeFont(&FreeMono9pt7b);
-  DisbuffHeader.setTextSize(1);
-  DisbuffHeader.setTextColor(WHITE);
-  DisbuffHeader.setTextDatum(TL_DATUM);
-  DisbuffHeader.fillRect(0, 0, 320, 25, BLACK);
-  DisbuffHeader.drawLine(0, 25, 320, 25, WHITE);
-
-  DisbuffValue.createSprite(320, 117);
-  DisbuffValue.setTextSize(1);
-  DisbuffValue.setTextColor(WHITE);
-  DisbuffValue.setTextDatum(TC_DATUM);
-  DisbuffValue.fillRect(0, 0, 320, 116, BLACK);
-
-  DisbuffGraph.createSprite(320, 97);
-  DisbuffGraph.setFreeFont(&FreeMono9pt7b);
-  DisbuffGraph.setTextSize(1);
-  DisbuffGraph.setTextColor(WHITE);
-  DisbuffGraph.setTextDatum(TC_DATUM);
-  DisbuffGraph.fillRect(0, 0, 320, 97, BLACK);
-
-  DisbuffBody.createSprite(320, 214);
 }
 
 void loadStateFile() {
@@ -896,6 +928,45 @@ void updateTimeState(struct state *oldstate, struct state *state) {
     state->sync_time = true;
 }
 
+void createSprites() {
+  DisbuffHeader.createSprite(320, 26);
+  DisbuffHeader.setFreeFont(&FreeMono9pt7b);
+  DisbuffHeader.setTextSize(1);
+  DisbuffHeader.setTextColor(WHITE);
+  DisbuffHeader.setTextDatum(TL_DATUM);
+  DisbuffHeader.fillRect(0, 0, 320, 25, BLACK);
+  DisbuffHeader.drawLine(0, 25, 320, 25, WHITE);
+
+  DisbuffValue.createSprite(320, 117);
+  DisbuffValue.setTextSize(1);
+  DisbuffValue.setTextColor(WHITE);
+  DisbuffValue.setTextDatum(TC_DATUM);
+  DisbuffValue.fillRect(0, 0, 320, 116, BLACK);
+
+  DisbuffGraph.createSprite(320, 97);
+  DisbuffGraph.setFreeFont(&FreeMono9pt7b);
+  DisbuffGraph.setTextSize(1);
+  DisbuffGraph.setTextColor(WHITE);
+  DisbuffGraph.setTextDatum(TC_DATUM);
+  DisbuffGraph.fillRect(0, 0, 320, 97, BLACK);
+
+  DisbuffBody.createSprite(320, 214);
+}
+
+uint16_t co2color(int value) {
+  if (value < 600) {
+    return CYAN;
+  } else if (value < 800) {
+    return GREEN;
+  } else if (value < 1000) {
+    return YELLOW;
+  } else if (value < 1400) {
+    return ORANGE;
+  } else {
+    return RED;
+  }
+}
+
 void drawScreen(struct state *oldstate, struct state *state) {
   if (!state->display_sleep) {
     drawHeader(oldstate, state);
@@ -935,20 +1006,6 @@ void drawHeader(struct state *oldstate, struct state *state) {
   DisbuffHeader.setTextDatum(TL_DATUM);
   DisbuffHeader.drawLine(0, 25, 320, 25, WHITE);
   DisbuffHeader.pushSprite(0, 0);
-}
-
-uint16_t co2color(int value) {
-  if (value < 600) {
-    return CYAN;
-  } else if (value < 800) {
-    return GREEN;
-  } else if (value < 1000) {
-    return YELLOW;
-  } else if (value < 1400) {
-    return ORANGE;
-  } else {
-    return RED;
-  }
 }
 
 void drawValues(struct state *oldstate, struct state *state) {
@@ -1358,7 +1415,7 @@ void setDisplayPower(bool state) {
   }
 }
 
-uint32_t Read32bit( uint8_t Addr ) {
+uint32_t Read32bit(uint8_t Addr) {
   uint32_t ReData = 0;
   Wire1.beginTransmission(0x34);
   Wire1.write(Addr);
@@ -1374,7 +1431,7 @@ uint32_t Read32bit( uint8_t Addr ) {
   return ReData;
 }
 
-uint32_t ReadByte ( uint8_t Addr ) {
+uint32_t ReadByte(uint8_t Addr) {
   Wire1.beginTransmission(0x34);
   Wire1.write(Addr);
   Wire1.endTransmission();
