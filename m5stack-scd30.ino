@@ -38,6 +38,9 @@
 
 #include "Logo.h"
 
+#define TIME_SYNC_HOUR 2
+#define TIME_SYNC_MIN rand() % 60
+
 #define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
 
 #define NUM_WIFI_CREDENTIALS 1
@@ -77,7 +80,8 @@ enum graphMode {
 enum menuMode {
   menuModeGraphs,
   menuModeCalibrationSettings,
-  menuModeWiFiSettings
+  menuModeWiFiSettings,
+  menuModeTimeSettings
 } ;
 
 enum info {
@@ -110,6 +114,7 @@ struct state {
   wl_status_t wifi_status = WL_DISCONNECTED;
   enum info show_info = infoEmpty;
   String password;
+  struct tm next_time_sync;
 } state;
 
 struct graph {
@@ -200,6 +205,11 @@ void setup() {
   createSprites();
   hideButtons();
 
+  if (!state.next_time_sync.tm_mday) {
+    state.next_time_sync = state.current_time;
+    setNextTimeSync();
+  }
+
   for (int i = 0; i < GRAPH_UNITS; i ++) {
     graph.temperature[i] = my_nan;
     graph.co2[i] = my_nan;
@@ -236,6 +246,7 @@ void loop() {
 
   handleWiFi(&oldstate, &state);
   checkWiFiStatus();
+  syncTime(&state);
 
   writeSsd(&state);
   cycle++;
@@ -1181,6 +1192,23 @@ void printTime() {
   strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
   Serial.printf("The current date/time in Zuerich is: %s", strftime_buf);
 
+}
+
+void syncTime(struct state *state) {
+  if (WiFi.status() != WL_CONNECTED ||
+      state->current_time.tm_hour < state->next_time_sync.tm_hour ||
+      state->current_time.tm_min < state->next_time_sync.tm_min) {
+    return;
+  }
+
+  setRtc();
+  setNextTimeSync();
+}
+
+void setNextTimeSync() {
+  state.next_time_sync.tm_mday++;
+  state.next_time_sync.tm_hour = TIME_SYNC_HOUR;
+  state.next_time_sync.tm_min = TIME_SYNC_MIN;
 }
 
 void setRtc() {
