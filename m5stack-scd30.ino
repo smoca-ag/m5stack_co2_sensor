@@ -89,6 +89,8 @@ enum info {
   infoWiFiConnected,
   infoWiFiFailed,
   infoWiFiLost,
+  infoTimeSyncSuccess,
+  infoTimeSyncFailed,
   infoEmpty
 } ;
 
@@ -112,9 +114,12 @@ struct state {
   bool is_wifi_activated = false;
   bool is_requesting_reset = false;
   wl_status_t wifi_status = WL_DISCONNECTED;
-  enum info show_info = infoEmpty;
+  enum info wifi_info = infoEmpty;
   String password;
   struct tm next_time_sync;
+  bool sync_time = false;
+  bool force_sync_time = false;
+  enum info time_info = infoEmpty;
 } state;
 
 struct graph {
@@ -137,12 +142,17 @@ ButtonColors onGreen      = {GREEN, BLACK, GREEN};
 // x, y, w, h, rot, txt, off col, on color, txt pos, x-offset, y-offset, corner radius 
 Button batteryButton(240, 0, 80, 40);
 Button co2Button(0, 26, 320, 88);
+
 Button midLeftButton(-2, 104, 163,  40, false, "midLeft", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 Button midRightButton(161, 104, 164, 40, false, "midRight", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
+
 Button toggleAutoCalButton(160, 166, 60, 50, false, "OFF", offRed, onRed);
 Button submitCalibrationButton(240, 166, 60, 50, false, "OK", offCyan, onCyan);
+
 Button toggleWiFiButton(20, 166, 120, 50, false, "OFF", offRed, onRed);
 Button resetWiFiButton(180, 166, 120, 50, false, "Reset", offCyan, onCyan);
+
+Button syncTimeButton(20, 166, 280, 50, false, "Sync Time", offCyan, onCyan);
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue  = TFT_eSprite(&M5.Lcd);
@@ -207,7 +217,8 @@ void setup() {
 
   if (!state.next_time_sync.tm_mday) {
     state.next_time_sync = state.current_time;
-    setNextTimeSync();
+    state.next_time_sync.tm_hour = TIME_SYNC_HOUR;
+    state.next_time_sync.tm_min = TIME_SYNC_MIN;
   }
 
   for (int i = 0; i < GRAPH_UNITS; i ++) {
@@ -241,9 +252,9 @@ void loop() {
   updatePassword(&state);
   updateStateFile(&oldstate, &state);
   updateWiFiState(&oldstate, &state);
+  updateTimeState(&oldstate, &state);
 
   drawScreen(&oldstate, &state);
-
   handleWiFi(&oldstate, &state);
   checkWiFiStatus();
   syncTime(&state);
@@ -603,7 +614,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
     Serial.println("No Credentials.");
     Serial.println("Start Configuration Portal.");
 
-    state->show_info = infoConfigPortalCredentials;
+    state->wifi_info = infoConfigPortalCredentials;
     drawScreen(oldstate, state);
 
     if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str())) {
@@ -734,6 +745,9 @@ void updateTouch(struct state *state) {
     if (resetWiFiButton.wasPressed()) {
       state->is_requesting_reset = true;
     }
+  } else if (state->menu_mode == menuModeTimeSettings) {
+    if (syncTimeButton.wasPressed())
+      state->force_sync_time = true;
   }
 
   if (M5.BtnA.wasPressed()) {
@@ -751,6 +765,10 @@ void updateTouch(struct state *state) {
       break;
     
     case menuModeWiFiSettings:
+      state->menu_mode = menuModeTimeSettings;
+      break;
+
+    case menuModeTimeSettings:
       state->menu_mode = menuModeGraphs;
       break;
 
@@ -854,20 +872,28 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
   state->wifi_status = WiFi.status();
 
   if (state->wifi_status == WL_CONNECTED)
-    state->show_info = infoWiFiConnected;
+    state->wifi_info = infoWiFiConnected;
   else if (state->wifi_status == WL_CONNECT_FAILED)
-    state->show_info = infoWiFiFailed;
+    state->wifi_info = infoWiFiFailed;
   else if (state->wifi_status == WL_DISCONNECTED)
-    state->show_info = infoEmpty;
+    state->wifi_info = infoEmpty;
   else if (state->wifi_status == WL_CONNECTION_LOST)
-    state->show_info = infoWiFiLost;
+    state->wifi_info = infoWiFiLost;
   else
-    state->show_info = infoEmpty;
+    state->wifi_info = infoEmpty;
 
   if (state->is_requesting_reset)
-    state->show_info = infoConfigPortalCredentials;
+    state->wifi_info = infoConfigPortalCredentials;
 
   Serial.println("WiFi Status: " + (String)state->wifi_status);
+}
+
+void updateTimeState(struct state *oldstate, struct state *state) {
+  if (state->current_time.tm_min == oldstate->current_time.tm_min)
+    return;
+
+  if (mktime(&state->current_time) > mktime(&state->next_time_sync))
+    state->sync_time = true;
 }
 
 void drawScreen(struct state *oldstate, struct state *state) {
@@ -884,6 +910,9 @@ void drawScreen(struct state *oldstate, struct state *state) {
     } else if (state->menu_mode == menuModeWiFiSettings) {
       clearScreen(oldstate, state);
       drawWiFiSettings(oldstate, state);
+    } else if (state->menu_mode == menuModeTimeSettings) {
+      clearScreen(oldstate, state);
+      drawTimeSettings(oldstate, state);
     }
   }
 }
@@ -1064,7 +1093,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
       state->is_wifi_activated == oldstate->is_wifi_activated &&
       state->is_requesting_reset == oldstate->is_requesting_reset &&
       state->wifi_status == oldstate->wifi_status &&
-      state->show_info == oldstate->show_info &&
+      state->wifi_info == oldstate->wifi_info &&
       state->menu_mode == oldstate->menu_mode) {
     return;
   }
@@ -1079,7 +1108,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
   DisbuffBody.setFreeFont(&FreeMono9pt7b);
   DisbuffBody.setTextSize(1);
 
-  if (state->show_info == infoConfigPortalCredentials) {
+  if (state->wifi_info == infoConfigPortalCredentials) {
     String wifiInfo = "Join " + ssid; 
     String ipInfo   = "Open http://" + 
                       (String)APStaticIP[0] + "." +
@@ -1090,14 +1119,14 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.drawString(wifiInfo, 25, 75);
     DisbuffBody.drawString(pwInfo, 40, 95);
     DisbuffBody.drawString(ipInfo, 20, 115);
-  } else if (state->show_info == infoWiFiConnected) {
+  } else if (state->wifi_info == infoWiFiConnected) {
     String connectedTo = (String)WiFi.SSID();
     String connectedInfo = "Connected: " + ((connectedTo.length() > 15) ? (connectedTo.substring(0, 14) + "...") : connectedTo);
     DisbuffBody.drawString( connectedInfo, 40, 90);
-  } else if (state->show_info == infoWiFiLost) {
+  } else if (state->wifi_info == infoWiFiLost) {
     DisbuffBody.setTextColor(YELLOW);
     DisbuffBody.drawString("Connection lost", 40, 90);
-  } else if (state->show_info == infoWiFiFailed) {
+  } else if (state->wifi_info == infoWiFiFailed) {
     DisbuffBody.setTextColor(RED);
     DisbuffBody.drawString("Connection failed", 60, 90);
   }
@@ -1111,6 +1140,45 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
   
   if (state->is_wifi_activated) 
     resetWiFiButton.draw();
+}
+
+void drawTimeSettings(struct state *oldstate, struct state *state) {
+  if (state->display_sleep == oldstate->display_sleep &&
+      state->wifi_status == oldstate->wifi_status &&
+      state->time_info == oldstate->time_info &&
+      state->menu_mode == oldstate->menu_mode) {
+    return;
+  }
+
+  DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+  DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
+  DisbuffBody.setTextColor(WHITE);
+  DisbuffBody.setTextSize(2);
+  DisbuffBody.drawString("Time", 75, 20);
+
+  DisbuffBody.setFreeFont(&FreeMono9pt7b);
+  DisbuffBody.setTextSize(1);
+
+  if (state->time_info == infoTimeSyncSuccess) {
+    DisbuffBody.setTextColor(GREEN);
+    DisbuffBody.drawString("Sync successful", 75, 95);
+  } else if (state->time_info == infoTimeSyncFailed) {
+    DisbuffBody.setTextColor(RED);
+    DisbuffBody.drawString("Sync Failed", 80, 95);
+  }
+
+  if (state->wifi_status != WL_CONNECTED) {
+    DisbuffBody.setTextColor(RED);
+    DisbuffBody.drawString("Can not synchronize", 45, 150);
+    DisbuffBody.drawString("WiFi is not connected", 40, 170);
+  }
+
+  DisbuffBody.pushSprite(0, 26);
+
+  // always draw Disbuff first, otherwise button is not visible
+  if (state->wifi_status == WL_CONNECTED)
+    syncTimeButton.draw();
 }
 
 void hideButtons() {
@@ -1195,28 +1263,27 @@ void printTime() {
 }
 
 void syncTime(struct state *state) {
-  if (WiFi.status() != WL_CONNECTED ||
-      state->current_time.tm_hour < state->next_time_sync.tm_hour ||
-      state->current_time.tm_min < state->next_time_sync.tm_min) {
+  if (state->wifi_status != WL_CONNECTED)
     return;
+
+  if (state->force_sync_time) {
+    Serial.println("force time sync");
+    setRtc(state);
+    state->force_sync_time = false;
+  } else if (state->sync_time) {
+    setRtc(state);
+    state->next_time_sync.tm_mday++;
+    state->sync_time = false;
   }
-
-  setRtc();
-  setNextTimeSync();
 }
 
-void setNextTimeSync() {
-  state.next_time_sync.tm_mday++;
-  state.next_time_sync.tm_hour = TIME_SYNC_HOUR;
-  state.next_time_sync.tm_min = TIME_SYNC_MIN;
-}
-
-void setRtc() {
+void setRtc(struct state *state) {
   configTime(0, 0, "pool.ntp.org");
 
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
     Serial.println("Failed to obtain time");
+    state->time_info = infoTimeSyncFailed;
     return;
   }
 
@@ -1233,6 +1300,7 @@ void setRtc() {
   M5.Rtc.SetDate(&rtcdate);
   M5.Rtc.SetTime(&rtctime);
   Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+  state->time_info = infoTimeSyncSuccess;
 }
 
 void setTimeFromRtc() {
