@@ -38,7 +38,7 @@
 
 #include <smoca_logo.h>
 
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 3
 
 #define GRAPH_UNITS 240
 
@@ -80,6 +80,7 @@ enum graphMode {
 enum menuMode {
     menuModeGraphs,
     menuModeCalibrationSettings,
+    menuModeCalibrationAlert,
     menuModeWiFiSettings,
     menuModeTimeSettings
 };
@@ -146,8 +147,8 @@ Button co2Button(0, 26, 320, 88);
 Button midLeftButton(-2, 104, 163, 40, false, "midLeft", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 Button midRightButton(161, 104, 164, 40, false, "midRight", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 
-Button toggleAutoCalButton(160, 166, 60, 50, false, "OFF", offRed, onRed);
-Button submitCalibrationButton(240, 166, 60, 50, false, "OK", offCyan, onCyan);
+Button toggleAutoCalButton(15, 166, 130, 50, false, "Auto Cal: OFF", offRed, onRed);
+Button submitCalibrationButton(175, 166, 130, 50, false, "Calibrate", offCyan, onCyan);
 
 Button toggleWiFiButton(20, 166, 120, 50, false, "OFF", offRed, onRed);
 Button resetWiFiButton(180, 166, 120, 50, false, "Reset", offCyan, onCyan);
@@ -226,7 +227,9 @@ void handleWiFi(struct state *oldstate, struct state *state);
 
 void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state);
 
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state);
+
+void resetCallback();
 
 void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
@@ -267,6 +270,8 @@ void drawValues(struct state *oldstate, struct state *state);
 void drawGraph(struct state *oldstate, struct state *state);
 
 void drawCalibrationSettings(struct state *oldstate, struct state *state);
+
+void drawCalibrationAlert(struct state *oldstate, struct state *state);
 
 void drawWiFiSettings(struct state *oldstate, struct state *state);
 
@@ -663,11 +668,8 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     }
 
     if (state->is_requesting_reset && !oldstate->is_requesting_reset) {
-        disconnectWiFi(true, true);
-        state->is_wifi_activated = false;
         ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-        resetWiFiManager(&ESPAsync_WiFiManager);
-        state->is_requesting_reset = false;
+        resetWiFiManager(&ESPAsync_WiFiManager, state);
     }
 }
 
@@ -729,15 +731,22 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
         Serial.println(ESPAsync_WiFiManager->getStatus(state->wifi_status));
 }
 
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
+void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state) {
     Router_SSID = "";
     Router_Pass = "";
     ESPAsync_WiFiManager->resetSettings();
+    state->wifi_status = WL_DISCONNECTED;
 
     setupWiFiManager(ESPAsync_WiFiManager);
     Serial.println("Start Configuration Portal for reset.");
-    ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state.password.c_str());
+    ESPAsync_WiFiManager->setSaveConfigCallback(resetCallback);
+    ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str());
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
+}
+
+void resetCallback() {
+    Serial.println("Requesting reset set to FALSE");
+    state.is_requesting_reset = false;
 }
 
 void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
@@ -827,14 +836,20 @@ void updateTouch(struct state *state) {
             state->auto_calibration_on = !state->auto_calibration_on;
             airSensor.setAutoSelfCalibration(state->auto_calibration_on);
         }
+        if (submitCalibrationButton.wasPressed())
+            state->menu_mode = menuModeCalibrationAlert;
+    } else if (state->menu_mode == menuModeCalibrationAlert) {
         if (submitCalibrationButton.wasPressed()) {
             airSensor.setForcedRecalibrationFactor(state->calibration_value);
             state->menu_mode = menuModeGraphs;
         }
+        if (toggleAutoCalButton.wasPressed())
+            state->menu_mode = menuModeCalibrationSettings;
     } else if (state->menu_mode == menuModeWiFiSettings) {
         if (toggleWiFiButton.wasPressed())
             state->is_wifi_activated = !state->is_wifi_activated;
         if (resetWiFiButton.wasPressed()) {
+            Serial.println("Requesting reset. State set to TRUE");
             state->is_requesting_reset = true;
         }
     } else if (state->menu_mode == menuModeTimeSettings) {
@@ -962,6 +977,7 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
         state->is_requesting_reset == oldstate->is_requesting_reset)
         return;
 
+    Serial.println("updating wifi status ...");
     state->wifi_status = WiFi.status();
 
     if (state->wifi_status == WL_CONNECTED)
@@ -977,6 +993,10 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
 
     if (state->is_requesting_reset)
         state->wifi_info = infoConfigPortalCredentials;
+    else {
+        Serial.println("Draw wifisettings after a reset was done.");
+        drawWiFiSettings(oldstate, state);
+    }
 
     Serial.println("WiFi Status: " + (String) state->wifi_status);
 }
@@ -1039,6 +1059,9 @@ void drawScreen(struct state *oldstate, struct state *state) {
         } else if (state->menu_mode == menuModeCalibrationSettings) {
             clearScreen(oldstate, state);
             drawCalibrationSettings(oldstate, state);
+        } else if (state->menu_mode == menuModeCalibrationAlert) {
+            clearScreen(oldstate, state);
+            drawCalibrationAlert(oldstate, state);
         } else if (state->menu_mode == menuModeWiFiSettings) {
             clearScreen(oldstate, state);
             drawWiFiSettings(oldstate, state);
@@ -1187,8 +1210,6 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextColor(WHITE);
-    DisbuffBody.drawString("Enable Auto", 15, 150);
-    DisbuffBody.drawString("Calibration", 15, 175);
 
     DisbuffBody.pushSprite(0, 26);
 
@@ -1201,8 +1222,45 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
 
     toggleAutoCalButton.off = state->auto_calibration_on ? offGreen : offRed;
     toggleAutoCalButton.on = state->auto_calibration_on ? onGreen : offGreen;
-    toggleAutoCalButton.setLabel(state->auto_calibration_on ? "ON" : "OFF");
+    String toggleAutoCalLabel = state->auto_calibration_on ? "Auto Cal: ON" : "Auto Cal: OFF";
+    toggleAutoCalButton.setLabel(toggleAutoCalLabel.c_str());
     toggleAutoCalButton.draw();
+
+    if (!state->auto_calibration_on) {
+        submitCalibrationButton.off = offCyan;
+        submitCalibrationButton.on = onCyan;
+        submitCalibrationButton.setLabel("Calibrate");
+        submitCalibrationButton.draw();
+    }
+}
+
+void drawCalibrationAlert(struct state *oldstate, struct state *state) {
+    if (state->display_sleep == oldstate->display_sleep &&
+        state->menu_mode == oldstate->menu_mode)
+        return;
+
+    DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+    DisbuffBody.setFreeFont(&FreeMono18pt7b);
+    DisbuffBody.setTextColor(WHITE);
+    DisbuffBody.drawString("Attention! ", 65, 20);
+
+    DisbuffBody.setFreeFont(&FreeMono12pt7b);
+    String ppm = String(state->calibration_value) + "ppm";
+    String info1 = "Change Calibration";
+    String info2 = "to " + ppm + " ?";
+    String info3 = "This can't be undone.";
+    DisbuffBody.drawString(info1, 30, 55);
+    DisbuffBody.drawString(info2, 85, 80);
+    DisbuffBody.drawString(info3, 20, 105);
+
+    DisbuffBody.pushSprite(0, 26);
+
+    toggleAutoCalButton.setLabel("NO");
+    toggleAutoCalButton.draw();
+    submitCalibrationButton.off = offGreen;
+    submitCalibrationButton.on = onGreen;
+    submitCalibrationButton.setLabel("YES");
     submitCalibrationButton.draw();
 }
 
