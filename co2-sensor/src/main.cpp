@@ -38,7 +38,7 @@
 
 #include <smoca_logo.h>
 
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 3
 
 #define GRAPH_UNITS 240
 
@@ -227,7 +227,9 @@ void handleWiFi(struct state *oldstate, struct state *state);
 
 void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state);
 
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state);
+
+void resetCallback();
 
 void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
@@ -666,11 +668,8 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     }
 
     if (state->is_requesting_reset && !oldstate->is_requesting_reset) {
-        disconnectWiFi(true, true);
-        state->is_wifi_activated = false;
         ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-        resetWiFiManager(&ESPAsync_WiFiManager);
-        state->is_requesting_reset = false;
+        resetWiFiManager(&ESPAsync_WiFiManager, state);
     }
 }
 
@@ -732,15 +731,22 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
         Serial.println(ESPAsync_WiFiManager->getStatus(state->wifi_status));
 }
 
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
+void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state) {
     Router_SSID = "";
     Router_Pass = "";
     ESPAsync_WiFiManager->resetSettings();
+    state->wifi_status = WL_DISCONNECTED;
 
     setupWiFiManager(ESPAsync_WiFiManager);
     Serial.println("Start Configuration Portal for reset.");
-    ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state.password.c_str());
+    ESPAsync_WiFiManager->setSaveConfigCallback(resetCallback);
+    ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str());
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
+}
+
+void resetCallback() {
+    Serial.println("Requesting reset set to FALSE");
+    state.is_requesting_reset = false;
 }
 
 void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
@@ -843,6 +849,7 @@ void updateTouch(struct state *state) {
         if (toggleWiFiButton.wasPressed())
             state->is_wifi_activated = !state->is_wifi_activated;
         if (resetWiFiButton.wasPressed()) {
+            Serial.println("Requesting reset. State set to TRUE");
             state->is_requesting_reset = true;
         }
     } else if (state->menu_mode == menuModeTimeSettings) {
@@ -970,6 +977,7 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
         state->is_requesting_reset == oldstate->is_requesting_reset)
         return;
 
+    Serial.println("updating wifi status ...");
     state->wifi_status = WiFi.status();
 
     if (state->wifi_status == WL_CONNECTED)
@@ -985,6 +993,10 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
 
     if (state->is_requesting_reset)
         state->wifi_info = infoConfigPortalCredentials;
+    else {
+        Serial.println("Draw wifisettings after a reset was done.");
+        drawWiFiSettings(oldstate, state);
+    }
 
     Serial.println("WiFi Status: " + (String) state->wifi_status);
 }
