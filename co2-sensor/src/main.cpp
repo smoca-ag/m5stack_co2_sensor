@@ -1,4 +1,4 @@
-/* 
+/*
  * This file is part of the co2sensor distribution (https://github.com/xxxx or http://xxx.github.io).
  * Copyright (c) 2020 David Gunzinger / smoca AG.
  *
@@ -20,7 +20,7 @@
 #include <M5Core2.h>
 #include <SparkFun_SCD30_Arduino_Library.h>
 
-// libraries for SD card
+ // libraries for SD card
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
@@ -75,14 +75,14 @@ enum graphMode {
   graphModeHumidity,
   graphModeBatteryMah,
   graphModeLogo
-} ;
+};
 
 enum menuMode {
   menuModeGraphs,
   menuModeCalibrationSettings,
   menuModeWiFiSettings,
   menuModeTimeSettings
-} ;
+};
 
 enum info {
   infoConfigPortalCredentials,
@@ -92,7 +92,7 @@ enum info {
   infoTimeSyncSuccess,
   infoTimeSyncFailed,
   infoEmpty
-} ;
+};
 
 struct state {
   int co2_ppm;
@@ -120,7 +120,7 @@ struct state {
   bool sync_time = false;
   bool force_sync_time = false;
   enum info time_info = infoEmpty;
-} state ;
+} state;
 
 struct graph {
   float co2[GRAPH_UNITS];
@@ -130,20 +130,20 @@ struct graph {
 } graph;
 
 // background, text, outline
-ButtonColors offWhite     = {BLACK, WHITE, WHITE};
-ButtonColors onWhite      = {WHITE, BLACK, WHITE};
-ButtonColors offCyan      = {BLACK, CYAN, CYAN};
-ButtonColors onCyan       = {CYAN, BLACK, CYAN};
-ButtonColors offRed       = {BLACK, RED, RED};
-ButtonColors onRed        = {RED, BLACK, RED};
-ButtonColors offGreen     = {BLACK, GREEN, GREEN};
-ButtonColors onGreen      = {GREEN, BLACK, GREEN};
+ButtonColors offWhite = { BLACK, WHITE, WHITE };
+ButtonColors onWhite = { WHITE, BLACK, WHITE };
+ButtonColors offCyan = { BLACK, CYAN, CYAN };
+ButtonColors onCyan = { CYAN, BLACK, CYAN };
+ButtonColors offRed = { BLACK, RED, RED };
+ButtonColors onRed = { RED, BLACK, RED };
+ButtonColors offGreen = { BLACK, GREEN, GREEN };
+ButtonColors onGreen = { GREEN, BLACK, GREEN };
 
 // x, y, w, h, rot, txt, off col, on color, txt pos, x-offset, y-offset, corner radius
 Button batteryButton(240, 0, 80, 40);
 Button co2Button(0, 26, 320, 88);
 
-Button midLeftButton(-2, 104, 163,  40, false, "midLeft", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
+Button midLeftButton(-2, 104, 163, 40, false, "midLeft", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 Button midRightButton(161, 104, 164, 40, false, "midRight", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 
 Button toggleAutoCalButton(160, 166, 60, 50, false, "OFF", offRed, onRed);
@@ -155,21 +155,21 @@ Button resetWiFiButton(180, 166, 120, 50, false, "Reset", offCyan, onCyan);
 Button syncTimeButton(20, 166, 280, 50, false, "Sync Time", offCyan, onCyan);
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
-TFT_eSprite DisbuffValue  = TFT_eSprite(&M5.Lcd);
-TFT_eSprite DisbuffGraph  = TFT_eSprite(&M5.Lcd);
-TFT_eSprite DisbuffBody   = TFT_eSprite(&M5.Lcd);
+TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
+TFT_eSprite DisbuffGraph = TFT_eSprite(&M5.Lcd);
+TFT_eSprite DisbuffBody = TFT_eSprite(&M5.Lcd);
 
-String ssid               = "smoca CO2-" + String(ESP_getChipId(), HEX);
-IPAddress stationIP       = IPAddress(0, 0, 0, 0);
-IPAddress gatewayIP       = IPAddress(192, 168, 2, 1);
-IPAddress netMask         = IPAddress(255, 255, 255, 0);
+String ssid = "smoca CO2-" + String(ESP_getChipId(), HEX);
+IPAddress stationIP = IPAddress(0, 0, 0, 0);
+IPAddress gatewayIP = IPAddress(192, 168, 2, 1);
+IPAddress netMask = IPAddress(255, 255, 255, 0);
 
-IPAddress dns1IP          = gatewayIP;
-IPAddress dns2IP          = IPAddress(8, 8, 8, 8);
+IPAddress dns1IP = gatewayIP;
+IPAddress dns2IP = IPAddress(8, 8, 8, 8);
 
-IPAddress APStaticIP      = IPAddress(192, 168, 100, 1);
-IPAddress APStaticGW      = IPAddress(192, 168, 100, 1);
-IPAddress APStaticSN      = IPAddress(255, 255, 255, 0);
+IPAddress APStaticIP = IPAddress(192, 168, 100, 1);
+IPAddress APStaticGW = IPAddress(192, 168, 100, 1);
+IPAddress APStaticSN = IPAddress(255, 255, 255, 0);
 
 AsyncWebServer webServer(80);
 
@@ -193,8 +193,8 @@ float my_nan;
 String randomPassword();
 void loadStateFile();
 void saveStateFile();
-void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig);
-void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig);
+void initAPIPConfigStruct(WiFi_AP_IPConfig& in_WM_AP_IPconfig);
+void initSTAIPConfigStruct(WiFi_STA_IPConfig& in_WM_STA_IPconfig);
 void initWiFi();
 void initSD();
 void initAirSensor();
@@ -206,42 +206,42 @@ void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 void loadConfigData();
 void saveConfigData();
-void handleWiFi(struct state *oldstate, struct state *state);
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state);
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
-void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+void handleWiFi(struct state* oldstate, struct state* state);
+void startWiFiManager(ESPAsync_WiFiManager* ESPAsync_WiFiManager, struct state* oldstate, struct state* state);
+void resetWiFiManager(ESPAsync_WiFiManager* ESPAsync_WiFiManager);
+void saveConfigPortalCredentials(ESPAsync_WiFiManager* ESPAsync_WiFiManager);
 bool areRouterCredentialsValid();
-void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
-void updateTouch(struct state *state);
-void updateTime(struct state *state);
-void updateBattery(struct state *state);
-void updateCo2(struct state *state);
-void updateGraph(struct state *oldstate, struct state *state);
-void updateLed(struct state *oldstate, struct state *state);
-void updatePassword(struct state *state);
-void saveStateFile(struct state *oldstate, struct state *state);
-void updateWiFiState(struct state *oldstate, struct state *state);
-void updateTimeState(struct state *oldstate, struct state *state);
+void setupWiFiManager(ESPAsync_WiFiManager* ESPAsync_WiFiManager);
+void updateTouch(struct state* state);
+void updateTime(struct state* state);
+void updateBattery(struct state* state);
+void updateCo2(struct state* state);
+void updateGraph(struct state* oldstate, struct state* state);
+void updateLed(struct state* oldstate, struct state* state);
+void updatePassword(struct state* state);
+void saveStateFile(struct state* oldstate, struct state* state);
+void updateWiFiState(struct state* oldstate, struct state* state);
+void updateTimeState(struct state* oldstate, struct state* state);
 void createSprites();
 uint16_t co2color(int value);
-void drawScreen(struct state *oldstate, struct state *state);
-void drawHeader(struct state *oldstate, struct state *state);
-void drawValues(struct state *oldstate, struct state *state);
-void drawGraph(struct state *oldstate, struct state *state);
-void drawCalibrationSettings(struct state *oldstate, struct state *state);
-void drawWiFiSettings(struct state *oldstate, struct state *state);
-void drawTimeSettings(struct state *oldstate, struct state *state);
+void drawScreen(struct state* oldstate, struct state* state);
+void drawHeader(struct state* oldstate, struct state* state);
+void drawValues(struct state* oldstate, struct state* state);
+void drawGraph(struct state* oldstate, struct state* state);
+void drawCalibrationSettings(struct state* oldstate, struct state* state);
+void drawWiFiSettings(struct state* oldstate, struct state* state);
+void drawTimeSettings(struct state* oldstate, struct state* state);
 void hideButtons();
-void clearScreen(struct state *oldstate, struct state *state);
-void syncTime(struct state *state);
-void writeSsd(struct state * state);
+void clearScreen(struct state* oldstate, struct state* state);
+void syncTime(struct state* state);
+void writeSsd(struct state* state);
 String padTwo(String input);
-void writeFile(fs::FS & fs, const char * path, const char * message);
+void writeFile(fs::FS& fs, const char* path, const char* message);
 void printTime();
-void syncTime(struct state *state);
-void setRtc(struct state *state);
+void syncTime(struct state* state);
+void setRtc(struct state* state);
 void setTimeFromRtc();
-void appendFile(fs::FS & fs, const char * path, const char * message);
+void appendFile(fs::FS& fs, const char* path, const char* message);
 void setDisplayPower(bool state);
 uint32_t Read32bit(uint8_t Addr);
 uint32_t ReadByte(uint8_t Addr);
@@ -278,7 +278,7 @@ void setup() {
     state.next_time_sync.tm_min = TIME_SYNC_MIN;
   }
 
-  for (int i = 0; i < GRAPH_UNITS; i ++) {
+  for (int i = 0; i < GRAPH_UNITS; i++) {
     graph.temperature[i] = my_nan;
     graph.co2[i] = my_nan;
     graph.humidity[i] = my_nan;
@@ -319,10 +319,11 @@ void loop() {
   writeSsd(&state);
   cycle++;
 
-  unsigned long duration = millis() - start ;
+  unsigned long duration = millis() - start;
   if (duration < frame_duration_ms) {
     delay(frame_duration_ms - duration);
-  } else {
+  }
+  else {
     //Serial.println("we are to slow:" + String(duration));
   }
 }
@@ -344,7 +345,7 @@ void loadStateFile() {
   File file = SPIFFS.open(STATE_FILENAME, "r");
 
   if (file) {
-    String battery_string =  file.readStringUntil('\n');
+    String battery_string = file.readStringUntil('\n');
     String auto_cal_string = file.readStringUntil('\n');
     String calibration_string = file.readStringUntil('\n');
     String is_wifi_activated = file.readStringUntil('\n');
@@ -362,17 +363,18 @@ void loadStateFile() {
     state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
     state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
     state.password = password;
-  } else {
+  }
+  else {
     Serial.println("state file could not be read.");
   }
 }
 
-void saveStateFile(struct state *oldstate, struct state *state) {
+void saveStateFile(struct state* oldstate, struct state* state) {
   if (state->battery_capacity == oldstate->battery_capacity &&
-      state->auto_calibration_on == oldstate->auto_calibration_on &&
-      state->calibration_value == oldstate->calibration_value &&
-      state->is_wifi_activated == oldstate->is_wifi_activated &&
-      state->password == oldstate->password) {
+    state->auto_calibration_on == oldstate->auto_calibration_on &&
+    state->calibration_value == oldstate->calibration_value &&
+    state->is_wifi_activated == oldstate->is_wifi_activated &&
+    state->password == oldstate->password) {
     return;
   }
 
@@ -387,13 +389,13 @@ void saveStateFile(struct state *oldstate, struct state *state) {
   f.close();
 }
 
-void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig) {
+void initAPIPConfigStruct(WiFi_AP_IPConfig& in_WM_AP_IPconfig) {
   in_WM_AP_IPconfig._ap_static_ip = APStaticIP;
   in_WM_AP_IPconfig._ap_static_gw = APStaticGW;
   in_WM_AP_IPconfig._ap_static_sn = APStaticSN;
 }
 
-void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig) {
+void initSTAIPConfigStruct(WiFi_STA_IPConfig& in_WM_STA_IPconfig) {
   in_WM_STA_IPconfig._sta_static_ip = stationIP;
   in_WM_STA_IPconfig._sta_static_gw = gatewayIP;
   in_WM_STA_IPconfig._sta_static_sn = netMask;
@@ -441,7 +443,8 @@ void initSD() {
     Serial.println("File doens't exist");
     Serial.println("Creating file...");
     writeFile(SD, "/data.txt", "Date, Co2 (ppm), Temperature, Humidity, Battery Charge \r\n");
-  } else {
+  }
+  else {
     Serial.println("File already exists");
   }
 
@@ -451,8 +454,7 @@ void initSD() {
 void initAirSensor() {
   Wire.begin(G32, G33);
 
-  if (airSensor.begin(Wire, state.auto_calibration_on) == false)
-  {
+  if (airSensor.begin(Wire, state.auto_calibration_on) == false)   {
     DisbuffValue.setTextColor(RED);
     Serial.println("Air sensor not detected. Please check wiring. Freezing...");
     DisbuffValue.drawString("Air sensor not detected.", 0, 0);
@@ -472,7 +474,7 @@ void checkWiFiStatus() {
   static ulong checkwifi_timeout = 0;
   static ulong current_millis;
 
-  #define WIFICHECK_INTERVAL 1000L
+#define WIFICHECK_INTERVAL 1000L
   current_millis = millis();
 
   if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
@@ -482,7 +484,7 @@ void checkWiFiStatus() {
 }
 
 void checkWiFi() {
-  if ( (state.wifi_status != WL_CONNECTED && state.is_wifi_activated) ) {
+  if ((state.wifi_status != WL_CONNECTED && state.is_wifi_activated)) {
     Serial.println("WiFi lost. Trying to reconnect. Status: " + (String)state.wifi_status);
     if (connectMultiWiFi() != WL_CONNECTED) {
       Serial.println("WiFi turned off.");
@@ -492,19 +494,19 @@ void checkWiFi() {
 }
 
 uint8_t connectMultiWiFi() {
-  #define WIFI_MULTI_1ST_CONNECT_WAITING_MS 0
-  #define WIFI_MULTI_CONNECT_WAITING_MS 50L
+#define WIFI_MULTI_1ST_CONNECT_WAITING_MS 0
+#define WIFI_MULTI_CONNECT_WAITING_MS 50L
   uint8_t status;
   LOGERROR(F("ConnectMultiWiFi with :"));
 
   if (areRouterCredentialsValid()) {
-    LOGERROR3(F("* Flash-stored Router_SSID = "), Router_SSID, F(", Router_Pass = "), Router_Pass );
+    LOGERROR3(F("* Flash-stored Router_SSID = "), Router_SSID, F(", Router_Pass = "), Router_Pass);
   }
 
   for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
     if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
-        strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) {
-      LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw );
+      strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) {
+      LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw);
     }
   }
 
@@ -519,19 +521,19 @@ uint8_t connectMultiWiFi() {
   status = wifiMulti.run();
   delay(WIFI_MULTI_1ST_CONNECT_WAITING_MS);
 
-  while ( ( i++ < 10 ) && ( status != WL_CONNECTED ) ) {
+  while ((i++ < 10) && (status != WL_CONNECTED)) {
     status = wifiMulti.run();
 
-    if ( status == WL_CONNECTED )
+    if (status == WL_CONNECTED)
       break;
     else
       delay(WIFI_MULTI_CONNECT_WAITING_MS);
   }
 
-  if ( status == WL_CONNECTED ) {
+  if (status == WL_CONNECTED) {
     LOGERROR1(F("WiFi connected after time: "), i);
     LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
-    LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP() );
+    LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP());
     Serial.println("WiFi Connected SSID: " + (String)WiFi.SSID());
   }
   else {
@@ -547,13 +549,13 @@ void disconnectWiFi(bool wifiOff, bool eraseAP) {
 }
 
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
-  #if USE_CONFIGURABLE_DNS
-    // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
-    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn, in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
-  #else
-    // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn);
-  #endif
+#if USE_CONFIGURABLE_DNS
+  // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
+  WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn, in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
+#else
+  // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
+  WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn);
+#endif
 }
 
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
@@ -571,12 +573,13 @@ void loadConfigData() {
   memset(&WM_STA_IPconfig, 0, sizeof(WM_STA_IPconfig));
 
   if (file) {
-    file.readBytes((char *) &WM_config,   sizeof(WM_config));
-    file.readBytes((char *) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
+    file.readBytes((char*)&WM_config, sizeof(WM_config));
+    file.readBytes((char*)&WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
     file.close();
     LOGERROR(F("OK"));
     displayIPConfigStruct(WM_STA_IPconfig);
-  } else {
+  }
+  else {
     LOGERROR(F("failed"));
   }
 }
@@ -586,16 +589,17 @@ void saveConfigData() {
   LOGERROR(F("SaveWiFiCfgFile "));
 
   if (file) {
-    file.write((uint8_t*) &WM_config, sizeof(WM_config));
-    file.write((uint8_t*) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
+    file.write((uint8_t*)&WM_config, sizeof(WM_config));
+    file.write((uint8_t*)&WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
     file.close();
     LOGERROR(F("OK"));
-  } else {
+  }
+  else {
     LOGERROR(F("failed"));
   }
 }
 
-void handleWiFi(struct state *oldstate, struct state *state) {
+void handleWiFi(struct state* oldstate, struct state* state) {
   if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
     state->is_wifi_activated = false;
 
@@ -616,9 +620,9 @@ void handleWiFi(struct state *oldstate, struct state *state) {
   }
 }
 
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
-                      struct state *oldstate,
-                      struct state *state) {
+void startWiFiManager(ESPAsync_WiFiManager* ESPAsync_WiFiManager,
+  struct state* oldstate,
+  struct state* state) {
   unsigned long startedAt = millis();
   setupWiFiManager(ESPAsync_WiFiManager);
 
@@ -635,23 +639,25 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
 
     for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
       if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") && (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
-        LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw );
+        LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw);
         wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
       }
     }
 
     if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated)
       connectMultiWiFi();
-  } else {
+  }
+  else {
     Serial.println("No Credentials.");
     Serial.println("Start Configuration Portal.");
 
     state->wifi_info = infoConfigPortalCredentials;
     drawScreen(oldstate, state);
 
-    if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str())) {
+    if (!ESPAsync_WiFiManager->startConfigPortal((const char*)ssid.c_str(), (const char*)state->password.c_str())) {
       Serial.println("Not connected to WiFi but continuing anyway.");
-    } else {
+    }
+    else {
       Serial.println("WiFi connected :D");
       Serial.println("WiFi Status: " + (String)state->wifi_status);
       Serial.println("WiFi activated: " + (String)state->is_wifi_activated);
@@ -661,34 +667,35 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
   }
 
   Serial.print("After waiting ");
-  Serial.print((float) (millis() - startedAt) / 1000L);
+  Serial.print((float)(millis() - startedAt) / 1000L);
   Serial.print(" secs more in loop(), connection result is ");
 
   if (state->is_wifi_activated && state->wifi_status == WL_CONNECTED) {
     Serial.print("connected. Local IP: ");
     Serial.println(WiFi.localIP());
-  } else
+  }
+  else
     Serial.println(ESPAsync_WiFiManager->getStatus(state->wifi_status));
 }
 
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
+void resetWiFiManager(ESPAsync_WiFiManager* ESPAsync_WiFiManager) {
   Router_SSID = "";
   Router_Pass = "";
   ESPAsync_WiFiManager->resetSettings();
 
   setupWiFiManager(ESPAsync_WiFiManager);
   Serial.println("Start Configuration Portal for reset.");
-  ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state.password.c_str());
+  ESPAsync_WiFiManager->startConfigPortal((const char*)ssid.c_str(), (const char*)state.password.c_str());
   saveConfigPortalCredentials(ESPAsync_WiFiManager);
 }
 
-void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
+void saveConfigPortalCredentials(ESPAsync_WiFiManager* ESPAsync_WiFiManager) {
   if (String(ESPAsync_WiFiManager->getSSID(0)) != "" && String(ESPAsync_WiFiManager->getSSID(1)) != "") {
     memset(&WM_config, 0, sizeof(WM_config));
 
     for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
       String tempSSID = ESPAsync_WiFiManager->getSSID(i);
-      String tempPW   = ESPAsync_WiFiManager->getPW(i);
+      String tempPW = ESPAsync_WiFiManager->getPW(i);
 
       if (strlen(tempSSID.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1)
         strcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str());
@@ -701,9 +708,9 @@ void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
         strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
 
       if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
-          String(WM_config.WiFi_Creds[i].wifi_ssid) != "0" &&
-          strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE ) {
-        LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw );
+        String(WM_config.WiFi_Creds[i].wifi_ssid) != "0" &&
+        strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) {
+        LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw);
         wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
       }
     }
@@ -716,39 +723,41 @@ bool areRouterCredentialsValid() {
   if (Router_SSID == "" || Router_SSID == "0") {
     Serial.println("invalid creds: " + Router_SSID);
     return false;
-  } else {
+  }
+  else {
     Serial.println("valid creds: " + Router_SSID);
     return true;
   }
 }
 
-void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
+void setupWiFiManager(ESPAsync_WiFiManager* ESPAsync_WiFiManager) {
   ESPAsync_WiFiManager->setDebugOutput(true);
   ESPAsync_WiFiManager->setAPStaticIPConfig(WM_AP_IPconfig); // set custom IP
   ESPAsync_WiFiManager->setMinimumSignalQuality(-1);
   ESPAsync_WiFiManager->setConfigPortalChannel(0);
 
-  #if !USE_DHCP_IP
-    #if USE_CONFIGURABLE_DNS
-      // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
-      ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask, dns1IP, dns2IP);
-    #else
-      // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-      ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
-    #endif
-  #endif
+#if !USE_DHCP_IP
+#if USE_CONFIGURABLE_DNS
+  // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
+  ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask, dns1IP, dns2IP);
+#else
+  // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
+  ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
+#endif
+#endif
 
   if (areRouterCredentialsValid()) {
     Serial.println("Got stored Credentials: " + Router_SSID);
     ESPAsync_WiFiManager->setConfigPortalTimeout(0);
-  } else {
+  }
+  else {
     Serial.println("No stored Credentials.");
   }
 
   ssid.toUpperCase();
 }
 
-void updateTouch(struct state *state) {
+void updateTouch(struct state* state) {
   if (state->menu_mode == menuModeGraphs) {
     if (batteryButton.wasPressed())
       state->graph_mode = graphModeBatteryMah;
@@ -758,7 +767,8 @@ void updateTouch(struct state *state) {
       state->graph_mode = graphModeTemperature;
     if (midRightButton.wasPressed())
       state->graph_mode = graphModeHumidity;
-  } else if (state->menu_mode == menuModeCalibrationSettings) {
+  }
+  else if (state->menu_mode == menuModeCalibrationSettings) {
     if (midLeftButton.wasPressed())
       state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
     if (midRightButton.wasPressed())
@@ -771,13 +781,15 @@ void updateTouch(struct state *state) {
       airSensor.setForcedRecalibrationFactor(state->calibration_value);
       state->menu_mode = menuModeGraphs;
     }
-  } else if (state->menu_mode == menuModeWiFiSettings) {
+  }
+  else if (state->menu_mode == menuModeWiFiSettings) {
     if (toggleWiFiButton.wasPressed())
       state->is_wifi_activated = !state->is_wifi_activated;
     if (resetWiFiButton.wasPressed()) {
       state->is_requesting_reset = true;
     }
-  } else if (state->menu_mode == menuModeTimeSettings) {
+  }
+  else if (state->menu_mode == menuModeTimeSettings) {
     if (syncTimeButton.wasPressed())
       state->force_sync_time = true;
   }
@@ -787,7 +799,7 @@ void updateTouch(struct state *state) {
     state->display_sleep = !state->display_sleep;
   }
   if (M5.BtnC.wasPressed()) {
-    switch (state->menu_mode){
+    switch (state->menu_mode) {
     case menuModeGraphs:
       state->menu_mode = menuModeCalibrationSettings;
       break;
@@ -810,7 +822,7 @@ void updateTouch(struct state *state) {
   }
 }
 
-void updateTime(struct state *state) {
+void updateTime(struct state* state) {
   if (((cycle + 1) % target_fps) != 0) {
     return;
   }
@@ -819,7 +831,7 @@ void updateTime(struct state *state) {
   }
 }
 
-void updateBattery(struct state *state) {
+void updateBattery(struct state* state) {
   if (((cycle + 1) % (target_fps)) != 0) {
     return;
   }
@@ -836,7 +848,7 @@ void updateBattery(struct state *state) {
   }
 
   state->battery_voltage = batVoltage;
-  state->battery_mah = 65536  * 0.5 *  (columbCharged - columbDischarged) / 3600.0 / 25.0;
+  state->battery_mah = 65536 * 0.5 * (columbCharged - columbDischarged) / 3600.0 / 25.0;
 
   if (state->in_ac && abs(state->battery_current) < 0.1 && state->battery_voltage >= 4.15 && abs(state->battery_mah - state->battery_capacity) > 1) {
     Serial.println("maximum found " + String(state->battery_mah));
@@ -858,15 +870,15 @@ void updateBattery(struct state *state) {
   state->in_ac = M5.Axp.isACIN();
 }
 
-void updateLed(struct state *oldstate, struct state *state) {
+void updateLed(struct state* oldstate, struct state* state) {
   if (oldstate->in_ac != state->in_ac) {
     M5.Axp.SetLed(state->in_ac ? 1 : 0);
   }
 }
 
-void updateGraph(struct state *oldstate, struct state *state) {
+void updateGraph(struct state* oldstate, struct state* state) {
   if (oldstate->current_time.tm_min == state->current_time.tm_min ||
-      state->co2_ppm == 0) {
+    state->co2_ppm == 0) {
     return;
   }
 
@@ -877,8 +889,8 @@ void updateGraph(struct state *oldstate, struct state *state) {
   state->graph_index = (state->graph_index + 1) % GRAPH_UNITS;
 }
 
-void updateCo2(struct state *state) {
-  if (((cycle + 2) %  (2 * target_fps)) != 0) {
+void updateCo2(struct state* state) {
+  if (((cycle + 2) % (2 * target_fps)) != 0) {
     return;
   }
 
@@ -889,16 +901,16 @@ void updateCo2(struct state *state) {
   }
 }
 
-void updatePassword(struct state *state) {
-  if (state->password == "" ) {
+void updatePassword(struct state* state) {
+  if (state->password == "") {
     state->password = randomPassword(8);
     Serial.println(state->password);
   }
 }
 
-void updateWiFiState(struct state *oldstate, struct state *state) {
+void updateWiFiState(struct state* oldstate, struct state* state) {
   if (WiFi.status() == oldstate->wifi_status &&
-      state->is_requesting_reset == oldstate->is_requesting_reset)
+    state->is_requesting_reset == oldstate->is_requesting_reset)
     return;
 
   state->wifi_status = WiFi.status();
@@ -920,7 +932,7 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
   Serial.println("WiFi Status: " + (String)state->wifi_status);
 }
 
-void updateTimeState(struct state *oldstate, struct state *state) {
+void updateTimeState(struct state* oldstate, struct state* state) {
   if (state->current_time.tm_min == oldstate->current_time.tm_min)
     return;
 
@@ -956,18 +968,22 @@ void createSprites() {
 uint16_t co2color(int value) {
   if (value < 600) {
     return CYAN;
-  } else if (value < 800) {
+  }
+  else if (value < 800) {
     return GREEN;
-  } else if (value < 1000) {
+  }
+  else if (value < 1000) {
     return YELLOW;
-  } else if (value < 1400) {
+  }
+  else if (value < 1400) {
     return ORANGE;
-  } else {
+  }
+  else {
     return RED;
   }
 }
 
-void drawScreen(struct state *oldstate, struct state *state) {
+void drawScreen(struct state* oldstate, struct state* state) {
   if (!state->display_sleep) {
     drawHeader(oldstate, state);
 
@@ -975,20 +991,23 @@ void drawScreen(struct state *oldstate, struct state *state) {
       clearScreen(oldstate, state);
       drawValues(oldstate, state);
       drawGraph(oldstate, state);
-    } else if (state->menu_mode == menuModeCalibrationSettings) {
+    }
+    else if (state->menu_mode == menuModeCalibrationSettings) {
       clearScreen(oldstate, state);
       drawCalibrationSettings(oldstate, state);
-    } else if (state->menu_mode == menuModeWiFiSettings) {
+    }
+    else if (state->menu_mode == menuModeWiFiSettings) {
       clearScreen(oldstate, state);
       drawWiFiSettings(oldstate, state);
-    } else if (state->menu_mode == menuModeTimeSettings) {
+    }
+    else if (state->menu_mode == menuModeTimeSettings) {
       clearScreen(oldstate, state);
       drawTimeSettings(oldstate, state);
     }
   }
 }
 
-void drawHeader(struct state *oldstate, struct state *state) {
+void drawHeader(struct state* oldstate, struct state* state) {
   if (
     state->current_time.tm_sec == oldstate->current_time.tm_sec &&
     state->battery_percent == oldstate->battery_percent &&
@@ -1002,13 +1021,13 @@ void drawHeader(struct state *oldstate, struct state *state) {
   strftime(strftime_buf, sizeof(strftime_buf) - 1, "%c", &(state->current_time));
   DisbuffHeader.drawString(String(strftime_buf), 0, 1);
   DisbuffHeader.setTextDatum(TR_DATUM);
-  DisbuffHeader.drawString(  String(state->battery_percent) + "%" + (state->in_ac ? "+" : "-"), 320, 0);
+  DisbuffHeader.drawString(String(state->battery_percent) + "%" + (state->in_ac ? "+" : "-"), 320, 0);
   DisbuffHeader.setTextDatum(TL_DATUM);
   DisbuffHeader.drawLine(0, 25, 320, 25, WHITE);
   DisbuffHeader.pushSprite(0, 0);
 }
 
-void drawValues(struct state *oldstate, struct state *state) {
+void drawValues(struct state* oldstate, struct state* state) {
   if (
     state->temperature_celsius == oldstate->temperature_celsius &&
     state->humidity_percent == oldstate->humidity_percent &&
@@ -1038,24 +1057,27 @@ void drawValues(struct state *oldstate, struct state *state) {
   co2Button.draw();
 }
 
-void drawGraph(struct state *oldstate, struct state *state) {
+void drawGraph(struct state* oldstate, struct state* state) {
   if (state->graph_mode == oldstate->graph_mode &&
-      state->graph_index == oldstate->graph_index &&
-      state->display_sleep == oldstate->display_sleep &&
-      state->menu_mode == oldstate->menu_mode) {
+    state->graph_index == oldstate->graph_index &&
+    state->display_sleep == oldstate->display_sleep &&
+    state->menu_mode == oldstate->menu_mode) {
     return;
   }
 
   DisbuffGraph.fillRect(0, 0, 320, 97, BLACK);
 
-  float *values = graph.co2;
+  float* values = graph.co2;
   if (state->graph_mode == graphModeBatteryMah) {
     values = graph.batteryMah;
-  } else if (state->graph_mode == graphModeTemperature) {
+  }
+  else if (state->graph_mode == graphModeTemperature) {
     values = graph.temperature;
-  } else if (state->graph_mode == graphModeHumidity) {
+  }
+  else if (state->graph_mode == graphModeHumidity) {
     values = graph.humidity;
-  } else if (state->graph_mode == graphModeCo2) {
+  }
+  else if (state->graph_mode == graphModeCo2) {
     values = graph.co2;
   }
 
@@ -1088,13 +1110,13 @@ void drawGraph(struct state *oldstate, struct state *state) {
   DisbuffGraph.drawString(String(max_value, 1), 0, 2);
   DisbuffGraph.drawString(String(min_value, 1), 0, 70);
 
-  for (i = 0; i < GRAPH_UNITS ; i++) {
+  for (i = 0; i < GRAPH_UNITS; i++) {
     float value = values[i];
     if (!isnan(value)) {
       int y = min(max(96 - int(factor * (value - min_value)), 0), 96);
       int x = 320 - (((state->graph_index - i) % GRAPH_UNITS + GRAPH_UNITS) % GRAPH_UNITS);
       uint16_t color = state->graph_mode == graphModeCo2 ? co2color(value) : WHITE;
-      for (int j = y ; j < 96 ; j++) {
+      for (int j = y; j < 96; j++) {
         DisbuffGraph.drawPixel(x, j, color);
       }
     }
@@ -1104,11 +1126,11 @@ void drawGraph(struct state *oldstate, struct state *state) {
   DisbuffGraph.pushSprite(0, 144);
 }
 
-void drawCalibrationSettings(struct state *oldstate, struct state *state) {
+void drawCalibrationSettings(struct state* oldstate, struct state* state) {
   if (state->display_sleep == oldstate->display_sleep &&
-      state->calibration_value == oldstate->calibration_value &&
-      state->auto_calibration_on == oldstate->auto_calibration_on &&
-      state->menu_mode == oldstate->menu_mode) {
+    state->calibration_value == oldstate->calibration_value &&
+    state->auto_calibration_on == oldstate->auto_calibration_on &&
+    state->menu_mode == oldstate->menu_mode) {
     return;
   }
 
@@ -1145,13 +1167,13 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
   submitCalibrationButton.draw();
 }
 
-void drawWiFiSettings(struct state *oldstate, struct state *state) {
+void drawWiFiSettings(struct state* oldstate, struct state* state) {
   if (state->display_sleep == oldstate->display_sleep &&
-      state->is_wifi_activated == oldstate->is_wifi_activated &&
-      state->is_requesting_reset == oldstate->is_requesting_reset &&
-      state->wifi_status == oldstate->wifi_status &&
-      state->wifi_info == oldstate->wifi_info &&
-      state->menu_mode == oldstate->menu_mode) {
+    state->is_wifi_activated == oldstate->is_wifi_activated &&
+    state->is_requesting_reset == oldstate->is_requesting_reset &&
+    state->wifi_status == oldstate->wifi_status &&
+    state->wifi_info == oldstate->wifi_info &&
+    state->menu_mode == oldstate->menu_mode) {
     return;
   }
 
@@ -1167,23 +1189,26 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
 
   if (state->wifi_info == infoConfigPortalCredentials) {
     String wifiInfo = "Join " + ssid;
-    String ipInfo   = "Open http://" +
-                      (String)APStaticIP[0] + "." +
-                      (String)APStaticIP[1] + "." +
-                      (String)APStaticIP[2] + "." +
-                      (String)APStaticIP[3];
-    String pwInfo   = "Password: " + state->password;
+    String ipInfo = "Open http://" +
+      (String)APStaticIP[0] + "." +
+      (String)APStaticIP[1] + "." +
+      (String)APStaticIP[2] + "." +
+      (String)APStaticIP[3];
+    String pwInfo = "Password: " + state->password;
     DisbuffBody.drawString(wifiInfo, 25, 75);
     DisbuffBody.drawString(pwInfo, 40, 95);
     DisbuffBody.drawString(ipInfo, 20, 115);
-  } else if (state->wifi_info == infoWiFiConnected) {
+  }
+  else if (state->wifi_info == infoWiFiConnected) {
     String connectedTo = (String)WiFi.SSID();
     String connectedInfo = "Connected: " + ((connectedTo.length() > 15) ? (connectedTo.substring(0, 14) + "...") : connectedTo);
-    DisbuffBody.drawString( connectedInfo, 40, 90);
-  } else if (state->wifi_info == infoWiFiLost) {
+    DisbuffBody.drawString(connectedInfo, 40, 90);
+  }
+  else if (state->wifi_info == infoWiFiLost) {
     DisbuffBody.setTextColor(YELLOW);
     DisbuffBody.drawString("Connection lost", 40, 90);
-  } else if (state->wifi_info == infoWiFiFailed) {
+  }
+  else if (state->wifi_info == infoWiFiFailed) {
     DisbuffBody.setTextColor(RED);
     DisbuffBody.drawString("Connection failed", 60, 90);
   }
@@ -1199,11 +1224,11 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     resetWiFiButton.draw();
 }
 
-void drawTimeSettings(struct state *oldstate, struct state *state) {
+void drawTimeSettings(struct state* oldstate, struct state* state) {
   if (state->display_sleep == oldstate->display_sleep &&
-      state->wifi_status == oldstate->wifi_status &&
-      state->time_info == oldstate->time_info &&
-      state->menu_mode == oldstate->menu_mode) {
+    state->wifi_status == oldstate->wifi_status &&
+    state->time_info == oldstate->time_info &&
+    state->menu_mode == oldstate->menu_mode) {
     return;
   }
 
@@ -1220,7 +1245,8 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
   if (state->time_info == infoTimeSyncSuccess) {
     DisbuffBody.setTextColor(GREEN);
     DisbuffBody.drawString("Sync successful", 75, 95);
-  } else if (state->time_info == infoTimeSyncFailed) {
+  }
+  else if (state->time_info == infoTimeSyncFailed) {
     DisbuffBody.setTextColor(RED);
     DisbuffBody.drawString("Sync Failed", 80, 95);
   }
@@ -1241,17 +1267,17 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
 void hideButtons() {
   for (int i = 0; i < Button::instances.size(); i++) {
     if (Button::instances[i]->getName() == M5.BtnA.getName() ||
-        Button::instances[i]->getName() == M5.BtnB.getName() ||
-        Button::instances[i]->getName() == M5.BtnC.getName() ||
-        Button::instances[i]->getName() == M5.background.getName()
-    ) {
+      Button::instances[i]->getName() == M5.BtnB.getName() ||
+      Button::instances[i]->getName() == M5.BtnC.getName() ||
+      Button::instances[i]->getName() == M5.background.getName()
+      ) {
       continue;
     }
     Button::instances[i]->hide();
   }
 }
 
-void clearScreen(struct state *oldstate, struct state *state) {
+void clearScreen(struct state* oldstate, struct state* state) {
   if (oldstate->menu_mode != state->menu_mode) {
     hideButtons();
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
@@ -1259,7 +1285,7 @@ void clearScreen(struct state *oldstate, struct state *state) {
   }
 }
 
-void writeSsd(struct state * state) {
+void writeSsd(struct state* state) {
   if (((cycle + 3) % (2 * target_fps)) != 0) {
     return;
   }
@@ -1271,14 +1297,14 @@ void writeSsd(struct state * state) {
     padTwo(String(state->current_time.tm_hour)) + "-" +
     padTwo(String(state->current_time.tm_min)) + "-" +
     padTwo(String(state->current_time.tm_sec)
-  );
+    );
   String dataMessage =
     dateTime + "," +
     String(state->co2_ppm) + "," +
     String(state->temperature_celsius / 10.0, 2) + "," +
     String(state->humidity_percent / 10.0, 2) + "," +
     String(state->battery_mah) + "\r\n";
-    //Serial.println(dataMessage);
+  //Serial.println(dataMessage);
   appendFile(SD, "/data.txt", dataMessage.c_str());
 }
 
@@ -1290,7 +1316,7 @@ String padTwo(String input) {
 }
 
 // Write to the SD card (DON'T MODIFY THIS FUNCTION)
-void writeFile(fs::FS & fs, const char * path, const char * message) {
+void writeFile(fs::FS& fs, const char* path, const char* message) {
   Serial.printf("Writing file: %s\n", path);
 
   File file = fs.open(path, FILE_WRITE);
@@ -1301,7 +1327,8 @@ void writeFile(fs::FS & fs, const char * path, const char * message) {
 
   if (file.print(message)) {
     Serial.println("File written");
-  } else {
+  }
+  else {
     Serial.println("Write failed");
   }
 
@@ -1316,10 +1343,9 @@ void printTime() {
   localtime_r(&now, &timeinfo);
   strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
   Serial.printf("The current date/time in Zuerich is: %s", strftime_buf);
-
 }
 
-void syncTime(struct state *state) {
+void syncTime(struct state* state) {
   if (state->wifi_status != WL_CONNECTED)
     return;
 
@@ -1327,14 +1353,15 @@ void syncTime(struct state *state) {
     Serial.println("force time sync");
     setRtc(state);
     state->force_sync_time = false;
-  } else if (state->sync_time) {
+  }
+  else if (state->sync_time) {
     setRtc(state);
     state->next_time_sync.tm_mday++;
     state->sync_time = false;
   }
 }
 
-void setRtc(struct state *state) {
+void setRtc(struct state* state) {
   configTime(0, 0, "pool.ntp.org");
 
   struct tm timeinfo;
@@ -1378,14 +1405,14 @@ void setTimeFromRtc() {
   time_t t = mktime(&tm);
 
   Serial.printf("Setting time: %s", asctime(&tm));
-  struct timeval epoch = { .tv_sec = t};
+  struct timeval epoch = { .tv_sec = t };
   settimeofday(&epoch, NULL);
   setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
   tzset();
 }
 
 // Append data to the SD card (DON'T MODIFY THIS FUNCTION)
-void appendFile(fs::FS & fs, const char * path, const char * message) {
+void appendFile(fs::FS& fs, const char* path, const char* message) {
   //Serial.printf("Appending to file: %s\n", path);
 
   File file = fs.open(path, FILE_APPEND);
@@ -1395,7 +1422,8 @@ void appendFile(fs::FS & fs, const char * path, const char * message) {
   }
   if (file.print(message)) {
     Serial.println("Message appended");
-  } else {
+  }
+  else {
     Serial.println("Append failed");
   }
   file.close();
@@ -1407,7 +1435,8 @@ void setDisplayPower(bool state) {
     M5.Lcd.wakeup();
     // Enable DC-DC3, enable backlight
     WriteByte(0x12, (ReadByte(0x12) | 2));
-  } else {
+  }
+  else {
     M5.Lcd.setBrightness(0);
     M5.Lcd.sleep();
     // Disable DC-DC3, display backlight
@@ -1422,8 +1451,7 @@ uint32_t Read32bit(uint8_t Addr) {
   Wire1.endTransmission();
   Wire1.requestFrom(0x34, 4);
 
-  for ( int i = 0 ; i < 4 ; i++ )
-  {
+  for (int i = 0; i < 4; i++)   {
     ReData <<= 8;
     ReData |= Wire1.read();
   }
