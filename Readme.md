@@ -45,10 +45,8 @@ Note: The optional battery increases the battery operation time from 6 to 10 hou
 To initialise the device do the following:
 
 1. Install [Platformio IDE](https://platformio.org/platformio-ide) or [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation.html) to use another IDE
-2. For MacOS only. Install [Silab USB Driver](https://www.silabs.com/Support%20Documents/Software/Mac_OSX_VCP_Driver.zip). If you use another OS, comment out `upload_port = /dev/cu.SLAB_USBtoUART` in `platformio.ini`.
-3. Open the `co2-sensor` project folder
-4. Run `pio lib install` in PlatformIO CLI to install project dependencies
-5. Flash the `main.cpp` script to your M5 Stack Core2
+2. Open the `co2-sensor` project folder
+3. Flash the `main.cpp` script to your M5 Stack Core2 with `pio run -t upload --upload-port {your_device}`. You can see a list of your devices with `pio device list`. Dependencies are installed automatically.
 
 ## Usage
 
