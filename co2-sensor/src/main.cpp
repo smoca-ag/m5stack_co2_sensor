@@ -82,11 +82,12 @@ struct state {
     enum info wifi_info = infoEmpty;
     String password;
     struct tm next_time_sync;
-    bool sync_time = false;
-    bool force_sync_time = false;
+    bool is_sync_needed = false;
+    bool force_sync = false;
     enum info time_info = infoEmpty;
     bool is_requesting_update = false;
     enum info update_info = infoEmpty;
+    String newest_version = "N/A";
 } state;
 
 struct graph {
@@ -225,7 +226,7 @@ void loop() {
     handleWiFi(&oldstate, &state);
     handleUpdate(&oldstate, &state);
     checkWiFiStatus();
-    syncTime(&state);
+    syncData(&state);
 
     writeSsd(&state);
     cycle++;
@@ -260,6 +261,7 @@ void loadStateFile() {
         String calibration_string = file.readStringUntil('\n');
         String is_wifi_activated = file.readStringUntil('\n');
         String password = file.readStringUntil('\n');
+        String newest_version = file.readStringUntil('\n');
         file.close();
 
         if (battery_string.length() > 0) {
@@ -273,6 +275,7 @@ void loadStateFile() {
         state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
         state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
         state.password = password;
+        state.newest_version = newest_version;
     } else {
         Serial.println("state file could not be read.");
     }
@@ -283,7 +286,8 @@ void saveStateFile(struct state *oldstate, struct state *state) {
         state->auto_calibration_on == oldstate->auto_calibration_on &&
         state->calibration_value == oldstate->calibration_value &&
         state->is_wifi_activated == oldstate->is_wifi_activated &&
-        state->password == oldstate->password) {
+        state->password == oldstate->password &&
+        state->newest_version == oldstate->newest_version) {
         return;
     }
 
@@ -293,7 +297,8 @@ void saveStateFile(struct state *oldstate, struct state *state) {
             (String) state->auto_calibration_on + "\n" +
             (String) state->calibration_value + "\n" +
             (String) state->is_wifi_activated + "\n" +
-            state->password + "\n"
+            state->password + "\n" +
+            state->newest_version + "\n"
     );
     f.close();
 }
@@ -698,13 +703,50 @@ void handleUpdate(struct state *oldstate, struct state *state) {
     if (state->is_requesting_update == oldstate->is_requesting_update)
         return;
 
-    // todo ota update
+    // todo send update request
 }
 
-void fetchRemoteVersion(struct state *state, const char *version) {
+void fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
-        version = "1.0.0";
-    } else version = "N/A";
+        WiFiClient client;
+        client.setTimeout(30);
+        if (!client.connect(FIRMWARE_SERVER, 80))
+            return;
+
+        String header = "GET " + (String)REMOTE_VERSION_FILE + "HTTP/1.0";
+        String host = "Host: " + (String)FIRMWARE_SERVER;
+
+        client.println(F(header.c_str()));
+        client.println(F(host.c_str()));
+        client.println(F("Connection: close"));
+        if (client.println() == 0)
+            return;
+
+        char status[32] = {0};
+        client.readBytesUntil('\r', status, sizeof(status));
+        if (strcmp(status, "HTTP/1.1 200 OK") != 0) {
+            Serial.print(F("Unexpected response: "));
+            Serial.println(status);
+            return;
+        }
+
+        char endOfHeaders[] = "\r\n\r\n";
+        if (!client.find(endOfHeaders)) {
+            Serial.println(F("Invalid response"));
+            return;
+        }
+
+        StaticJsonDocument<64> doc;
+        DeserializationError error = deserializeJson(doc, client);
+        if (error) {
+            Serial.print(F("deserializeJson() failed: "));
+            Serial.println(error.f_str());
+            return;
+        }
+
+        state->newest_version = doc["version"].as<String>();
+        client.stop();
+    } 
 }
 
 void updateTouch(struct state *state) {
@@ -743,7 +785,7 @@ void updateTouch(struct state *state) {
         }
     } else if (state->menu_mode == menuModeTimeSettings) {
         if (syncTimeButton.wasPressed())
-            state->force_sync_time = true;
+            state->force_sync = true;
     } else if (state->menu_mode == menuModeUpdateSettings) {
         if (syncTimeButton.wasPressed())
             state->is_requesting_update = true;
@@ -879,7 +921,7 @@ void updateTimeState(struct state *oldstate, struct state *state) {
         return;
 
     if (mktime(&state->current_time) > mktime(&state->next_time_sync))
-        state->sync_time = true;
+        state->is_sync_needed = true;
 }
 
 void createSprites() {
@@ -1242,10 +1284,6 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
         state->menu_mode == oldstate->menu_mode)
         return;
 
-    // todo get remote version
-    const char *remoteVersion;
-    fetchRemoteVersion(state, remoteVersion);
-
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 
     DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
@@ -1257,7 +1295,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setTextSize(1);
 
     String info1 = "Version: " + (String)VERSION_NUMBER;
-    String info2 = "Newest: " + (String)remoteVersion;
+    String info2 = "Newest: " + state->newest_version;
     DisbuffBody.drawString(info1, 80, 80);
     DisbuffBody.drawString(info2, 85, 100);
 
@@ -1274,8 +1312,8 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
 
     DisbuffBody.pushSprite(0, 26);
 
-    if (needFirmwareUpdate(VERSION_NUMBER, remoteVersion) && state->wifi_status == WL_CONNECTED) {
-        syncTimeButton.setLabel("Update");
+    if (needFirmwareUpdate(VERSION_NUMBER, (const char *) state->newest_version.c_str())) {
+        syncTimeButton.setLabel("Update Firmware");
         syncTimeButton.draw();
     }
 }
@@ -1302,6 +1340,9 @@ void clearScreen(struct state *oldstate, struct state *state) {
 }
 
 bool needFirmwareUpdate(const char *deviceVersion, const char *remoteVersion) {
+    if (!remoteVersion || remoteVersion == "N/A")
+        return false;
+
     int device[3], remote[3];
     sscanf(deviceVersion, "%d.%d.%d", &device[0], &device[1], &device[2]);
     sscanf(deviceVersion, "%d.%d.%d", &device[0], &device[1], &device[2]);
@@ -1373,18 +1414,19 @@ void printTime() {
     Serial.printf("The current date/time in Zuerich is: %s", strftime_buf);
 }
 
-void syncTime(struct state *state) {
+void syncData(struct state *state) {
     if (state->wifi_status != WL_CONNECTED)
         return;
 
-    if (state->force_sync_time) {
-        Serial.println("force time sync");
+    if (state->force_sync) {
+        fetchRemoteVersion(state);
         setRtc(state);
-        state->force_sync_time = false;
-    } else if (state->sync_time) {
+        state->force_sync = false;
+    } else if (state->is_sync_needed) {
+        fetchRemoteVersion(state);
         setRtc(state);
         state->next_time_sync.tm_mday++;
-        state->sync_time = false;
+        state->is_sync_needed = false;
     }
 }
 

@@ -1,28 +1,35 @@
+// hardware
 #include <m5stack_core2/pins_arduino.h>
 #include <Arduino.h>
 #include <M5Core2.h>
 #include <SparkFun_SCD30_Arduino_Library.h>
 
-// libraries for SD card
+// memory
 #include <FS.h>
 #include <SD.h>
 #include <SPI.h>
 #include <sys/time.h>
 #include <SPIFFS.h>
 
-// libraries for WiFi AccessPoint and ConfigPortal
+// WiFi AccessPoint and ConfigPortal
 #include <WiFi.h>
-#include <WiFiClient.h>
 #include <WiFiMulti.h>
 #include <ESPAsync_WiFiManager.h>
+#include <ArduinoJson.h>
 
-// library for time sync
+// time sync
 #include <NTPClient.h>
+
+// firmware update
+#include <WiFiClient.h>
+#include <Update.h>
 
 #include <smoca_logo.h>
 
 #define VERSION_NUMBER "1.0.0"
-#define UPDATE_SERVER "co2-sensor-firmware.smoca.ch"
+#define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
+#define REMOTE_VERSION_FILE "/version.json"
+#define REMOTE_FIRMWARE_FILE "/firmware.bin"
 
 #define _ESPASYNC_WIFIMGR_LOGLEVEL_ 3
 
@@ -91,7 +98,7 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
 void handleUpdate(struct state *oldstate, struct state *state);
 
-void fetchRemoteVersion(struct state *state, const char *version);
+void fetchRemoteVersion(struct state *state);
 
 void updateTouch(struct state *state);
 
@@ -141,8 +148,6 @@ void clearScreen(struct state *oldstate, struct state *state);
 
 bool needFirmwareUpdate(const char *deviceVersion, const char *remoteVersion);
 
-void syncTime(struct state *state);
-
 void writeSsd(struct state *state);
 
 String padTwo(String input);
@@ -151,7 +156,7 @@ void writeFile(fs::FS &fs, const char *path, const char *message);
 
 void printTime();
 
-void syncTime(struct state *state);
+void syncData(struct state *state);
 
 void setRtc(struct state *state);
 
