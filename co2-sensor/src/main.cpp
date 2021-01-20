@@ -704,9 +704,9 @@ void handleUpdate(struct state *oldstate, struct state *state) {
         return;
 
     if (state->is_requesting_update && state->wifi_status == WL_CONNECTED) {
-        String firmware = (String)FIRMWARE_SERVER + (String)REMOTE_FIRMWARE_FILE;
+        String firmwareFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_FIRMWARE_FILE;
         HTTPClient http;
-        http.begin(firmware);
+        http.begin(firmwareFile);
         int httpCode = http.GET();
 
         if (httpCode <= 0) {
@@ -744,7 +744,8 @@ void handleUpdate(struct state *oldstate, struct state *state) {
 void fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
         HTTPClient http;
-        http.begin((String)FIRMWARE_SERVER);
+        String versionFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_VERSION_FILE;
+        http.begin(versionFile);
         int httpCode = http.GET();
 
         if (httpCode <= 0) {
@@ -754,9 +755,8 @@ void fetchRemoteVersion(struct state *state) {
         }
         
         WiFiClient client = http.getStream();
-        http.end();
 
-        StaticJsonDocument<64> doc;
+        StaticJsonDocument<128> doc;
         DeserializationError error = deserializeJson(doc, client);
         if (error) {
             Serial.print("deserializeJson() failed: ");
@@ -765,7 +765,7 @@ void fetchRemoteVersion(struct state *state) {
         }
 
         state->newest_version = doc["version"].as<String>();
-        client.stop();
+        http.end();
     } 
 }
 
@@ -1260,9 +1260,9 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->wifi_status == oldstate->wifi_status &&
         state->time_info == oldstate->time_info &&
-        state->menu_mode == oldstate->menu_mode) {
+        state->force_sync == oldstate->force_sync &&
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 
