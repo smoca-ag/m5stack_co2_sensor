@@ -15,45 +15,7 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <m5stack_core2/pins_arduino.h>
-#include <Arduino.h>
-#include <M5Core2.h>
-#include <SparkFun_SCD30_Arduino_Library.h>
-
-// libraries for SD card
-#include <FS.h>
-#include <SD.h>
-#include <SPI.h>
-#include <sys/time.h>
-#include <SPIFFS.h>
-
-// libraries for WiFi AccessPoint and ConfigPortal
-#include <WiFi.h>
-#include <WiFiClient.h>
-#include <WiFiMulti.h>
-#include <ESPAsync_WiFiManager.h>
-
-// library for time sync
-#include <NTPClient.h>
-
-#include <smoca_logo.h>
-
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 3
-
-#define GRAPH_UNITS 240
-
-#define NUM_WIFI_CREDENTIALS 1
-#define MAX_SSID_LEN 32
-#define MAX_PW_LEN 64
-#define MIN_AP_PASSWORD_SIZE 8
-#define USE_DHCP_IP true
-#define USE_CONFIGURABLE_DNS true
-
-#define TIME_SYNC_HOUR 2
-#define TIME_SYNC_MIN rand() % 60
-
-#define STATE_FILENAME "/state"
-#define CONFIG_FILENAME "/wifi_config"
+#include <main.h>
 
 typedef struct {
     char wifi_ssid[MAX_SSID_LEN];
@@ -82,7 +44,8 @@ enum menuMode {
     menuModeCalibrationSettings,
     menuModeCalibrationAlert,
     menuModeWiFiSettings,
-    menuModeTimeSettings
+    menuModeTimeSettings,
+    menuModeUpdateSettings
 };
 
 enum info {
@@ -92,6 +55,7 @@ enum info {
     infoWiFiLost,
     infoTimeSyncSuccess,
     infoTimeSyncFailed,
+    infoUpdateFailed,
     infoEmpty
 };
 
@@ -121,6 +85,8 @@ struct state {
     bool sync_time = false;
     bool force_sync_time = false;
     enum info time_info = infoEmpty;
+    bool is_requesting_update = false;
+    enum info update_info = infoEmpty;
 } state;
 
 struct graph {
@@ -191,122 +157,6 @@ int target_fps = 20;
 int frame_duration_ms = 1000 / target_fps;
 float my_nan;
 
-String randomPassword();
-
-void loadStateFile();
-
-void saveStateFile();
-
-void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig);
-
-void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig);
-
-void initWiFi();
-
-void initSD();
-
-void initAirSensor();
-
-void checkWiFiStatus();
-
-void checkWiFi();
-
-uint8_t connectMultiWiFi();
-
-void disconnectWiFi(bool wifiOff, bool eraseAP);
-
-void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
-
-void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);
-
-void loadConfigData();
-
-void saveConfigData();
-
-void handleWiFi(struct state *oldstate, struct state *state);
-
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state);
-
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state);
-
-void resetCallback();
-
-void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
-
-bool areRouterCredentialsValid();
-
-void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
-
-void updateTouch(struct state *state);
-
-void updateTime(struct state *state);
-
-void updateBattery(struct state *state);
-
-void updateCo2(struct state *state);
-
-void updateGraph(struct state *oldstate, struct state *state);
-
-void updateLed(struct state *oldstate, struct state *state);
-
-void updatePassword(struct state *state);
-
-void saveStateFile(struct state *oldstate, struct state *state);
-
-void updateWiFiState(struct state *oldstate, struct state *state);
-
-void updateTimeState(struct state *oldstate, struct state *state);
-
-void createSprites();
-
-uint16_t co2color(int value);
-
-void drawScreen(struct state *oldstate, struct state *state);
-
-void drawHeader(struct state *oldstate, struct state *state);
-
-void drawValues(struct state *oldstate, struct state *state);
-
-void drawGraph(struct state *oldstate, struct state *state);
-
-void drawCalibrationSettings(struct state *oldstate, struct state *state);
-
-void drawCalibrationAlert(struct state *oldstate, struct state *state);
-
-void drawWiFiSettings(struct state *oldstate, struct state *state);
-
-void drawTimeSettings(struct state *oldstate, struct state *state);
-
-void hideButtons();
-
-void clearScreen(struct state *oldstate, struct state *state);
-
-void syncTime(struct state *state);
-
-void writeSsd(struct state *state);
-
-String padTwo(String input);
-
-void writeFile(fs::FS &fs, const char *path, const char *message);
-
-void printTime();
-
-void syncTime(struct state *state);
-
-void setRtc(struct state *state);
-
-void setTimeFromRtc();
-
-void appendFile(fs::FS &fs, const char *path, const char *message);
-
-void setDisplayPower(bool state);
-
-uint32_t Read32bit(uint8_t Addr);
-
-uint32_t ReadByte(uint8_t Addr);
-
-void WriteByte(uint8_t Addr, uint8_t Data);
-
 void setup() {
     Serial.println("Start Setup.");
     my_nan = sqrt(-1);
@@ -373,6 +223,7 @@ void loop() {
 
     drawScreen(&oldstate, &state);
     handleWiFi(&oldstate, &state);
+    handleUpdate(&oldstate, &state);
     checkWiFiStatus();
     syncTime(&state);
 
@@ -655,6 +506,33 @@ void saveConfigData() {
     }
 }
 
+void handleNavigation(struct state *state) {
+    switch (state->menu_mode) {
+        case menuModeGraphs:
+            state->menu_mode = menuModeCalibrationSettings;
+            break;
+
+        case menuModeCalibrationSettings:
+            state->menu_mode = menuModeWiFiSettings;
+            break;
+
+        case menuModeWiFiSettings:
+            state->menu_mode = menuModeTimeSettings;
+            break;
+
+        case menuModeTimeSettings:
+            state->menu_mode = menuModeUpdateSettings;
+            break;
+
+        case menuModeUpdateSettings:
+            state->menu_mode = menuModeGraphs;
+            break;
+
+        default:
+            break;
+    }
+}
+
 void handleWiFi(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
         state->is_wifi_activated = false;
@@ -745,7 +623,6 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
 }
 
 void resetCallback() {
-    Serial.println("Requesting reset set to FALSE");
     state.is_requesting_reset = false;
 }
 
@@ -817,6 +694,19 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     ssid.toUpperCase();
 }
 
+void handleUpdate(struct state *oldstate, struct state *state) {
+    if (state->is_requesting_update == oldstate->is_requesting_update)
+        return;
+
+    // todo ota update
+}
+
+void fetchRemoteVersion(struct state *state, const char *version) {
+    if (state->wifi_status == WL_CONNECTED) {
+        version = "1.0.0";
+    } else version = "N/A";
+}
+
 void updateTouch(struct state *state) {
     if (state->menu_mode == menuModeGraphs) {
         if (batteryButton.wasPressed())
@@ -849,12 +739,14 @@ void updateTouch(struct state *state) {
         if (toggleWiFiButton.wasPressed())
             state->is_wifi_activated = !state->is_wifi_activated;
         if (resetWiFiButton.wasPressed()) {
-            Serial.println("Requesting reset. State set to TRUE");
             state->is_requesting_reset = true;
         }
     } else if (state->menu_mode == menuModeTimeSettings) {
         if (syncTimeButton.wasPressed())
             state->force_sync_time = true;
+    } else if (state->menu_mode == menuModeUpdateSettings) {
+        if (syncTimeButton.wasPressed())
+            state->is_requesting_update = true;
     }
 
     if (M5.BtnA.wasPressed()) {
@@ -862,26 +754,7 @@ void updateTouch(struct state *state) {
         state->display_sleep = !state->display_sleep;
     }
     if (M5.BtnC.wasPressed()) {
-        switch (state->menu_mode) {
-            case menuModeGraphs:
-                state->menu_mode = menuModeCalibrationSettings;
-                break;
-
-            case menuModeCalibrationSettings:
-                state->menu_mode = menuModeWiFiSettings;
-                break;
-
-            case menuModeWiFiSettings:
-                state->menu_mode = menuModeTimeSettings;
-                break;
-
-            case menuModeTimeSettings:
-                state->menu_mode = menuModeGraphs;
-                break;
-
-            default:
-                break;
-        }
+        handleNavigation(state);
     }
 }
 
@@ -1068,6 +941,9 @@ void drawScreen(struct state *oldstate, struct state *state) {
         } else if (state->menu_mode == menuModeTimeSettings) {
             clearScreen(oldstate, state);
             drawTimeSettings(oldstate, state);
+        } else if (state->menu_mode == menuModeUpdateSettings) {
+            clearScreen(oldstate, state);
+            drawUpdateSettings(oldstate, state);
         }
     }
 }
@@ -1279,7 +1155,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
     DisbuffBody.setTextColor(WHITE);
     DisbuffBody.setTextSize(2);
-    DisbuffBody.drawString("WiFi", 80, 20);
+    DisbuffBody.drawString("WiFi", 75, 10);
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
@@ -1332,7 +1208,7 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
     DisbuffBody.setTextColor(WHITE);
     DisbuffBody.setTextSize(2);
-    DisbuffBody.drawString("Time", 75, 20);
+    DisbuffBody.drawString("Time", 75, 10);
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
@@ -1354,8 +1230,54 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.pushSprite(0, 26);
 
     // always draw Disbuff first, otherwise button is not visible
-    if (state->wifi_status == WL_CONNECTED)
+    if (state->wifi_status == WL_CONNECTED) {
+        syncTimeButton.setLabel("Sync Time");
         syncTimeButton.draw();
+    }
+}
+
+void drawUpdateSettings(struct state *oldstate, struct state *state) {
+    if (state->display_sleep == oldstate->display_sleep &&
+        state->wifi_status == oldstate->wifi_status &&
+        state->menu_mode == oldstate->menu_mode)
+        return;
+
+    // todo get remote version
+    const char *remoteVersion;
+    fetchRemoteVersion(state, remoteVersion);
+
+    DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+    DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
+    DisbuffBody.setTextColor(WHITE);
+    DisbuffBody.setTextSize(2);
+    DisbuffBody.drawString("Updates", 15, 10);
+
+    DisbuffBody.setFreeFont(&FreeMono9pt7b);
+    DisbuffBody.setTextSize(1);
+
+    String info1 = "Version: " + (String)VERSION_NUMBER;
+    String info2 = "Newest: " + (String)remoteVersion;
+    DisbuffBody.drawString(info1, 80, 80);
+    DisbuffBody.drawString(info2, 85, 100);
+
+    if (state->update_info == infoUpdateFailed) {
+        DisbuffBody.setTextColor(RED);
+        DisbuffBody.drawString("Update failed!", 40, 120);
+    }
+    
+    if (state->wifi_status != WL_CONNECTED) {
+        DisbuffBody.setTextColor(RED);
+        DisbuffBody.drawString("Can not update device", 35, 150);
+        DisbuffBody.drawString("WiFi is not connected", 40, 170);
+    }
+
+    DisbuffBody.pushSprite(0, 26);
+
+    if (needFirmwareUpdate(VERSION_NUMBER, remoteVersion) && state->wifi_status == WL_CONNECTED) {
+        syncTimeButton.setLabel("Update");
+        syncTimeButton.draw();
+    }
 }
 
 void hideButtons() {
@@ -1377,6 +1299,19 @@ void clearScreen(struct state *oldstate, struct state *state) {
         DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
         DisbuffBody.pushSprite(0, 26);
     }
+}
+
+bool needFirmwareUpdate(const char *deviceVersion, const char *remoteVersion) {
+    int device[3], remote[3];
+    sscanf(deviceVersion, "%d.%d.%d", &device[0], &device[1], &device[2]);
+    sscanf(deviceVersion, "%d.%d.%d", &device[0], &device[1], &device[2]);
+
+    for (int i = 0; i < 3; i++) {
+        if (remote[i] > device[i])
+            return true;
+    }
+
+    return false;
 }
 
 void writeSsd(struct state *state) {
