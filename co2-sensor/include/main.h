@@ -22,6 +22,7 @@
 
 // firmware update
 #include <WiFiClient.h>
+#include <HTTPClient.h>
 #include <Update.h>
 
 #include <smoca_logo.h>

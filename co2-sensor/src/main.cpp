@@ -87,7 +87,7 @@ struct state {
     enum info time_info = infoEmpty;
     bool is_requesting_update = false;
     enum info update_info = infoEmpty;
-    String newest_version = "N/A";
+    String newest_version;
 } state;
 
 struct graph {
@@ -224,9 +224,9 @@ void loop() {
 
     drawScreen(&oldstate, &state);
     handleWiFi(&oldstate, &state);
-    handleUpdate(&oldstate, &state);
     checkWiFiStatus();
     syncData(&state);
+    handleUpdate(&oldstate, &state);
 
     writeSsd(&state);
     cycle++;
@@ -703,43 +703,63 @@ void handleUpdate(struct state *oldstate, struct state *state) {
     if (state->is_requesting_update == oldstate->is_requesting_update)
         return;
 
-    // todo send update request
+    if (state->is_requesting_update && state->wifi_status == WL_CONNECTED) {
+        String firmware = (String)FIRMWARE_SERVER + (String)REMOTE_FIRMWARE_FILE;
+        HTTPClient http;
+        http.begin(firmware);
+        int httpCode = http.GET();
+
+        if (httpCode <= 0) {
+            Serial.print("Fetching firmware failed, error: ");
+            Serial.println(http.errorToString(httpCode));
+            return;
+        }
+
+        int contentLen = http.getSize();
+        if (!Update.begin(contentLen)) {
+            Serial.println("Not enough space to update firmware");
+            return;
+        }
+
+        WiFiClient* client = http.getStreamPtr();
+        size_t written = Update.writeStream(*client);
+
+        if (written != contentLen) {
+            Serial.println("Could not finish update. Canceling.");
+            return;
+        }
+
+        if (Update.isFinished()) {
+            Serial.println("Update was successful. Rebooting.");
+            ESP.restart();
+        } else {
+            Serial.print("Could not finish update: ");
+            Serial.println((String)Update.getError());
+        }
+
+        http.end();
+    }
 }
 
 void fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
-        WiFiClient client;
-        client.setTimeout(30);
-        if (!client.connect(FIRMWARE_SERVER, 80))
-            return;
+        HTTPClient http;
+        http.begin((String)FIRMWARE_SERVER);
+        int httpCode = http.GET();
 
-        String header = "GET " + (String)REMOTE_VERSION_FILE + "HTTP/1.0";
-        String host = "Host: " + (String)FIRMWARE_SERVER;
-
-        client.println(F(header.c_str()));
-        client.println(F(host.c_str()));
-        client.println(F("Connection: close"));
-        if (client.println() == 0)
-            return;
-
-        char status[32] = {0};
-        client.readBytesUntil('\r', status, sizeof(status));
-        if (strcmp(status, "HTTP/1.1 200 OK") != 0) {
-            Serial.print(F("Unexpected response: "));
-            Serial.println(status);
+        if (httpCode <= 0) {
+            Serial.print("Fetching version failed, error: ");
+            Serial.println(http.errorToString(httpCode));
             return;
         }
-
-        char endOfHeaders[] = "\r\n\r\n";
-        if (!client.find(endOfHeaders)) {
-            Serial.println(F("Invalid response"));
-            return;
-        }
+        
+        WiFiClient client = http.getStream();
+        http.end();
 
         StaticJsonDocument<64> doc;
         DeserializationError error = deserializeJson(doc, client);
         if (error) {
-            Serial.print(F("deserializeJson() failed: "));
+            Serial.print("deserializeJson() failed: ");
             Serial.println(error.f_str());
             return;
         }
@@ -816,7 +836,6 @@ void updateBattery(struct state *state) {
 
     int columbCharged = Read32bit(0xB0);
     int columbDischarged = Read32bit(0xB4);
-    float sig = columbCharged > columbDischarged ? 1.0 : -1.0;
     float batVoltage = M5.Axp.GetBatVoltage();
     state->battery_current = M5.Axp.GetBatCurrent();
 
@@ -1281,6 +1300,7 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
 void drawUpdateSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->wifi_status == oldstate->wifi_status &&
+        state->newest_version == oldstate->newest_version &&
         state->menu_mode == oldstate->menu_mode)
         return;
 
@@ -1295,7 +1315,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setTextSize(1);
 
     String info1 = "Version: " + (String)VERSION_NUMBER;
-    String info2 = "Newest: " + state->newest_version;
+    String info2 = "Newest: " + (state->newest_version ? state->newest_version : "N/A");
     DisbuffBody.drawString(info1, 80, 80);
     DisbuffBody.drawString(info2, 85, 100);
 
@@ -1340,7 +1360,7 @@ void clearScreen(struct state *oldstate, struct state *state) {
 }
 
 bool needFirmwareUpdate(const char *deviceVersion, const char *remoteVersion) {
-    if (!remoteVersion || remoteVersion == "N/A")
+    if (!remoteVersion)
         return false;
 
     int device[3], remote[3];
@@ -1452,6 +1472,7 @@ void setRtc(struct state *state) {
 
     M5.Rtc.SetDate(&rtcdate);
     M5.Rtc.SetTime(&rtctime);
+    Serial.print("Synced time to: ");
     Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
     state->time_info = infoTimeSyncSuccess;
 }
