@@ -471,7 +471,8 @@ void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
                 in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
 #else
     // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn);
+    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw,
+                in_WM_STA_IPconfig._sta_static_sn);
 #endif
 }
 
@@ -537,6 +538,7 @@ void handleNavigation(struct state *state) {
             break;
 
         default:
+            state->menu_mode = menuModeGraphs;
             break;
     }
 }
@@ -707,7 +709,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
         return;
 
     if (state->is_requesting_update && state->wifi_status == WL_CONNECTED) {
-        String firmwareFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_FIRMWARE_FILE;
+        String firmwareFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_FIRMWARE_FILE;
         HTTPClient http;
         http.begin(firmwareFile);
         int httpCode = http.GET();
@@ -724,13 +726,13 @@ void handleUpdate(struct state *oldstate, struct state *state) {
             return;
         }
 
-        WiFiClient* client = http.getStreamPtr();
+        WiFiClient *client = http.getStreamPtr();
         size_t written = Update.writeStream(*client);
 
         if (written == contentLen) {
-            Serial.println("Written " + (String)written + " successfully");
+            Serial.println("Written " + (String) written + " successfully");
         } else {
-            Serial.println("Written only " + (String)written + "/" + (String)contentLen + ". Canceling.");
+            Serial.println("Written only " + (String) written + "/" + (String) contentLen + ". Canceling.");
             return;
         }
 
@@ -738,9 +740,9 @@ void handleUpdate(struct state *oldstate, struct state *state) {
             if (Update.isFinished()) {
                 Serial.println("Update was successful. Rebooting.");
                 ESP.restart();
-            } else 
+            } else
                 Serial.println("Error Occurred. Error #: " + String(Update.getError()));
-        } else 
+        } else
             Serial.println("Error Occurred. Error #: " + String(Update.getError()));
 
         http.end();
@@ -750,7 +752,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
 void fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
         HTTPClient http;
-        String versionFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_VERSION_FILE;
+        String versionFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_VERSION_FILE;
         http.begin(versionFile);
         int httpCode = http.GET();
 
@@ -759,7 +761,7 @@ void fetchRemoteVersion(struct state *state) {
             Serial.println(http.errorToString(httpCode));
             return;
         }
-        
+
         WiFiClient client = http.getStream();
 
         StaticJsonDocument<128> doc;
@@ -772,7 +774,7 @@ void fetchRemoteVersion(struct state *state) {
 
         state->newest_version = doc["version"].as<String>();
         http.end();
-    } 
+    }
 }
 
 void updateTouch(struct state *state) {
@@ -933,10 +935,8 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
 
     if (state->is_requesting_reset)
         state->wifi_info = infoConfigPortalCredentials;
-    else {
-        Serial.println("Draw wifisettings after a reset was done.");
+    else if (state->menu_mode == menuModeWiFiSettings)
         drawWiFiSettings(oldstate, state);
-    }
 
     Serial.println("WiFi Status: " + (String) state->wifi_status);
 }
@@ -945,7 +945,7 @@ void updateTimeState(struct state *oldstate, struct state *state) {
     if (state->current_time.tm_min == oldstate->current_time.tm_min)
         return;
 
-    if (mktime(&state->current_time) > mktime(&state->next_time_sync)) 
+    if (mktime(&state->current_time) > mktime(&state->next_time_sync))
         state->is_sync_needed = true;
 }
 
@@ -1009,6 +1009,7 @@ void drawScreen(struct state *oldstate, struct state *state) {
             clearScreen(oldstate, state);
             drawTimeSettings(oldstate, state);
         } else if (state->menu_mode == menuModeUpdateSettings) {
+            state->time_info = infoEmpty;
             clearScreen(oldstate, state);
             drawUpdateSettings(oldstate, state);
         }
@@ -1320,7 +1321,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
-    String info1 = "Version: " + (String)VERSION_NUMBER;
+    String info1 = "Version: " + (String) VERSION_NUMBER;
     String info2 = "Newest: " + (state->newest_version == "" ? "N/A" : state->newest_version);
     DisbuffBody.drawString(info1, 80, 80);
     DisbuffBody.drawString(info2, 85, 100);
@@ -1329,7 +1330,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
         DisbuffBody.setTextColor(RED);
         DisbuffBody.drawString("Update failed!", 40, 120);
     }
-    
+
     if (state->wifi_status != WL_CONNECTED) {
         DisbuffBody.setTextColor(RED);
         DisbuffBody.drawString("Can not update device", 35, 150);
