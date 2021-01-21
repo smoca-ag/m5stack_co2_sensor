@@ -218,14 +218,15 @@ void loop() {
     updateGraph(&oldstate, &state);
     updateLed(&oldstate, &state);
     updatePassword(&state);
-    saveStateFile(&oldstate, &state);
     updateWiFiState(&oldstate, &state);
     updateTimeState(&oldstate, &state);
+
+    syncData(&state);
+    saveStateFile(&oldstate, &state);
 
     drawScreen(&oldstate, &state);
     handleWiFi(&oldstate, &state);
     checkWiFiStatus();
-    syncData(&state);
     handleUpdate(&oldstate, &state);
 
     writeSsd(&state);
@@ -276,6 +277,7 @@ void loadStateFile() {
         state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
         state.password = password;
         state.newest_version = newest_version;
+        Serial.println("Loaded state file." + state.newest_version);
     } else {
         Serial.println("state file could not be read.");
     }
@@ -301,6 +303,7 @@ void saveStateFile(struct state *oldstate, struct state *state) {
             state->newest_version + "\n"
     );
     f.close();
+    Serial.println("State file saved");
 }
 
 void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig) {
@@ -1290,7 +1293,7 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
 
     DisbuffBody.pushSprite(0, 26);
 
-    // always draw Disbuff first, otherwise button is not visible
+    // always push Disbuff before drawing buttons, otherwise button is not visible
     if (state->wifi_status == WL_CONNECTED) {
         syncTimeButton.setLabel("Sync Time");
         syncTimeButton.draw();
@@ -1315,7 +1318,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setTextSize(1);
 
     String info1 = "Version: " + (String)VERSION_NUMBER;
-    String info2 = "Newest: " + (state->newest_version ? state->newest_version : "N/A");
+    String info2 = "Newest: " + (state->newest_version == "" ? "N/A" : state->newest_version);
     DisbuffBody.drawString(info1, 80, 80);
     DisbuffBody.drawString(info2, 85, 100);
 
@@ -1332,6 +1335,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
 
     DisbuffBody.pushSprite(0, 26);
 
+    // always push Disbuff before drawing buttons, otherwise button is not visible
     if (needFirmwareUpdate(VERSION_NUMBER, (const char *) state->newest_version.c_str())) {
         syncTimeButton.setLabel("Update Firmware");
         syncTimeButton.draw();
@@ -1360,12 +1364,12 @@ void clearScreen(struct state *oldstate, struct state *state) {
 }
 
 bool needFirmwareUpdate(const char *deviceVersion, const char *remoteVersion) {
-    if (!remoteVersion)
+    if (!remoteVersion || remoteVersion[0] == '\0')
         return false;
 
     int device[3], remote[3];
     sscanf(deviceVersion, "%d.%d.%d", &device[0], &device[1], &device[2]);
-    sscanf(deviceVersion, "%d.%d.%d", &device[0], &device[1], &device[2]);
+    sscanf(remoteVersion, "%d.%d.%d", &remote[0], &remote[1], &remote[2]);
 
     for (int i = 0; i < 3; i++) {
         if (remote[i] > device[i])
