@@ -183,8 +183,8 @@ void setup() {
     createSprites();
     hideButtons();
 
-    if (!state.next_time_sync.tm_mday) {
-        state.next_time_sync = state.current_time;
+    if (!state.next_time_sync.tm_year) {
+        state.next_time_sync.tm_year = 1900;
         state.next_time_sync.tm_hour = TIME_SYNC_HOUR;
         state.next_time_sync.tm_min = TIME_SYNC_MIN;
     }
@@ -945,7 +945,7 @@ void updateTimeState(struct state *oldstate, struct state *state) {
     if (state->current_time.tm_min == oldstate->current_time.tm_min)
         return;
 
-    if (mktime(&state->current_time) > mktime(&state->next_time_sync))
+    if (mktime(&state->current_time) > mktime(&state->next_time_sync)) 
         state->is_sync_needed = true;
 }
 
@@ -1452,7 +1452,11 @@ void syncData(struct state *state) {
     } else if (state->is_sync_needed) {
         fetchRemoteVersion(state);
         setRtc(state);
+        getLocalTime(&(state->current_time));
+        state->next_time_sync = state->current_time;
         state->next_time_sync.tm_mday++;
+        state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
+        state->next_time_sync.tm_min = TIME_SYNC_MIN;
         state->is_sync_needed = false;
     }
 }
