@@ -49,6 +49,7 @@ enum menuMode {
 };
 
 enum info {
+    infoCalSuccess,
     infoConfigPortalCredentials,
     infoWiFiConnected,
     infoWiFiFailed,
@@ -76,6 +77,7 @@ struct state {
     enum menuMode menu_mode = menuModeGraphs;
     bool auto_calibration_on = false;
     int calibration_value = 400;
+    enum info cal_info = infoEmpty;
     bool is_wifi_activated = false;
     bool is_requesting_reset = false;
     wl_status_t wifi_status = WL_DISCONNECTED;
@@ -114,13 +116,13 @@ Button co2Button(0, 26, 320, 88);
 Button midLeftButton(-2, 104, 163, 40, false, "midLeft", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 Button midRightButton(161, 104, 164, 40, false, "midRight", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 
-Button toggleAutoCalButton(15, 166, 130, 50, false, "Auto Cal: OFF", offRed, onRed);
-Button submitCalibrationButton(175, 166, 130, 50, false, "Calibrate", offCyan, onCyan);
+Button toggleAutoCalButton(15, 175, 130, 50, false, "Auto Cal: OFF", offRed, onRed);
+Button submitCalibrationButton(175, 175, 130, 50, false, "Calibrate", offCyan, onCyan);
 
-Button toggleWiFiButton(20, 166, 120, 50, false, "OFF", offRed, onRed);
-Button resetWiFiButton(180, 166, 120, 50, false, "Reset", offCyan, onCyan);
+Button toggleWiFiButton(20, 175, 120, 50, false, "OFF", offRed, onRed);
+Button resetWiFiButton(180, 175, 120, 50, false, "Reset", offCyan, onCyan);
 
-Button syncTimeButton(20, 166, 280, 50, false, "Sync Time", offCyan, onCyan);
+Button syncTimeButton(20, 175, 280, 50, false, "Sync Time", offCyan, onCyan);
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
@@ -801,7 +803,8 @@ void updateTouch(struct state *state) {
     } else if (state->menu_mode == menuModeCalibrationAlert) {
         if (submitCalibrationButton.wasPressed()) {
             airSensor.setForcedRecalibrationFactor(state->calibration_value);
-            state->menu_mode = menuModeGraphs;
+            state->menu_mode = menuModeCalibrationSettings;
+            state->cal_info = infoCalSuccess;
         }
         if (toggleAutoCalButton.wasPressed())
             state->menu_mode = menuModeCalibrationSettings;
@@ -1003,11 +1006,12 @@ void drawScreen(struct state *oldstate, struct state *state) {
             clearScreen(oldstate, state);
             drawCalibrationAlert(oldstate, state);
         } else if (state->menu_mode == menuModeWiFiSettings) {
+            state->cal_info = infoEmpty;
             clearScreen(oldstate, state);
             drawWiFiSettings(oldstate, state);
         } else if (state->menu_mode == menuModeTimeSettings) {
             clearScreen(oldstate, state);
-            drawTimeSettings(oldstate, state);
+            drawSyncSettings(oldstate, state);
         } else if (state->menu_mode == menuModeUpdateSettings) {
             state->time_info = infoEmpty;
             clearScreen(oldstate, state);
@@ -1136,6 +1140,7 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->calibration_value == oldstate->calibration_value &&
         state->auto_calibration_on == oldstate->auto_calibration_on &&
+        state->cal_info == oldstate->cal_info &&
         state->menu_mode == oldstate->menu_mode) {
         return;
     }
@@ -1154,6 +1159,11 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextColor(WHITE);
+
+    if (state->cal_info == infoCalSuccess) {
+        DisbuffBody.setTextColor(GREEN);
+        DisbuffBody.drawString("Calibration Successful", 35, 130);
+    }
 
     DisbuffBody.pushSprite(0, 26);
 
@@ -1263,7 +1273,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
         resetWiFiButton.draw();
 }
 
-void drawTimeSettings(struct state *oldstate, struct state *state) {
+void drawSyncSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->wifi_status == oldstate->wifi_status &&
         state->time_info == oldstate->time_info &&
@@ -1276,17 +1286,20 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
     DisbuffBody.setTextColor(WHITE);
     DisbuffBody.setTextSize(2);
-    DisbuffBody.drawString("Time", 75, 10);
+    DisbuffBody.drawString("Sync", 75, 10);
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
+    DisbuffBody.drawString("Sync time & firmware", 40, 80);
+    DisbuffBody.drawString("with online Servers.", 40, 95);
+
     if (state->time_info == infoTimeSyncSuccess) {
         DisbuffBody.setTextColor(GREEN);
-        DisbuffBody.drawString("Sync successful", 75, 95);
+        DisbuffBody.drawString("Sync successful", 75, 115);
     } else if (state->time_info == infoTimeSyncFailed) {
         DisbuffBody.setTextColor(RED);
-        DisbuffBody.drawString("Sync Failed", 80, 95);
+        DisbuffBody.drawString("Sync Failed", 80, 115);
     }
 
     if (state->wifi_status != WL_CONNECTED) {
@@ -1299,7 +1312,7 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
 
     // always push Disbuff before drawing buttons, otherwise button is not visible
     if (state->wifi_status == WL_CONNECTED) {
-        syncTimeButton.setLabel("Sync Time");
+        syncTimeButton.setLabel("Synchronize");
         syncTimeButton.draw();
     }
 }
@@ -1353,7 +1366,7 @@ void hideButtons() {
             button->getName() == M5.BtnC.getName() ||
             button->getName() == M5.background.getName())
             continue;
-            
+
         button->hide();
     }
 }

@@ -139,7 +139,7 @@ void drawCalibrationAlert(struct state *oldstate, struct state *state);
 
 void drawWiFiSettings(struct state *oldstate, struct state *state);
 
-void drawTimeSettings(struct state *oldstate, struct state *state);
+void drawSyncSettings(struct state *oldstate, struct state *state);
 
 void drawUpdateSettings(struct state *oldstate, struct state *state);
 
