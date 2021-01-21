@@ -727,18 +727,21 @@ void handleUpdate(struct state *oldstate, struct state *state) {
         WiFiClient* client = http.getStreamPtr();
         size_t written = Update.writeStream(*client);
 
-        if (written != contentLen) {
-            Serial.println("Could not finish update. Canceling.");
+        if (written == contentLen) {
+            Serial.println("Written " + (String)written + " successfully");
+        } else {
+            Serial.println("Written only " + (String)written + "/" + (String)contentLen + ". Canceling.");
             return;
         }
 
-        if (Update.isFinished()) {
-            Serial.println("Update was successful. Rebooting.");
-            ESP.restart();
-        } else {
-            Serial.print("Could not finish update: ");
-            Serial.println((String)Update.getError());
-        }
+        if (Update.end()) {
+            if (Update.isFinished()) {
+                Serial.println("Update was successful. Rebooting.");
+                ESP.restart();
+            } else 
+                Serial.println("Error Occurred. Error #: " + String(Update.getError()));
+        } else 
+            Serial.println("Error Occurred. Error #: " + String(Update.getError()));
 
         http.end();
     }
