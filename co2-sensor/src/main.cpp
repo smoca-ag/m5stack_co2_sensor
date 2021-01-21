@@ -152,6 +152,19 @@ DNSServer dnsServer;
 String Router_SSID;
 String Router_Pass;
 
+String MQTTTopics[MQTT_TOPIC_COUNT];
+
+char AIO_SERVER[AIO_SERVER_LEN];
+char AIO_SERVERPORT[AIO_PORT_LEN];
+char AIO_USERNAME[AIO_USERNAME_LEN];
+char AIO_KEY[AIO_KEY_LEN];
+
+WiFiClient *client = NULL;
+Adafruit_MQTT_Client *mqtt = NULL;
+Adafruit_MQTT_Publish *publishCO2 = NULL;
+Adafruit_MQTT_Publish *publishHumidity = NULL;
+Adafruit_MQTT_Publish *publishTemperature = NULL;
+
 // statistics
 unsigned long cycle;
 int target_fps = 20;
@@ -483,6 +496,62 @@ void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
 #endif
 }
 
+void loadMQTTConfig() {
+    File file = SPIFFS.open(MQTT_FILENAME, "r");
+
+    if (!file) {
+        Serial.println("failed to open mqtt file for reading");
+        return;
+    }
+
+    size_t size = file.size();
+    std::unique_ptr<char[]> buf(new char[size + 1]);
+    file.readBytes(buf.get(), size);
+    file.close();
+
+    DynamicJsonDocument json(1024);
+    DeserializationError error = deserializeJson(json, buf.get());
+    
+    if (error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.f_str());
+        return;
+    }
+
+    if (json.containsKey(AIO_SERVER_Label))
+        strcpy(AIO_SERVER, json[AIO_SERVER_Label]);
+
+    if (json.containsKey(AIO_SERVERPORT_Label))
+        strcpy(AIO_SERVERPORT, json[AIO_SERVERPORT_Label]);
+
+    if (json.containsKey(AIO_USERNAME_Label))
+        strcpy(AIO_USERNAME, json[AIO_USERNAME_Label]);
+
+    if (json.containsKey(AIO_KEY_Label))
+        strcpy(AIO_KEY, json[AIO_KEY_Label]);
+
+}
+
+void saveMQTTConfig() {
+    DynamicJsonDocument json(1024);
+
+    json[AIO_SERVER_Label] = AIO_SERVER;
+    json[AIO_SERVERPORT_Label] = AIO_SERVERPORT;
+    json[AIO_USERNAME_Label] = AIO_USERNAME;
+    json[AIO_KEY_Label] = AIO_KEY;
+
+    File file = SPIFFS.open(MQTT_FILENAME, "w");
+
+    if (!file) {
+        Serial.println("failed to open mqtt file to for writing");
+        return;
+    }
+
+    serializeJson(json, file);
+    file.close();
+    
+}
+
 void loadConfigData() {
     File file = SPIFFS.open(CONFIG_FILENAME, "r");
     LOGERROR(F("LoadWiFiCfgFile "));
@@ -563,6 +632,17 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
                       struct state *oldstate,
                       struct state *state) {
     unsigned long startedAt = millis();
+
+    ESPAsync_WMParameter AIO_SERVER_FIELD(AIO_SERVER_Label, "AIO SERVER", AIO_SERVER, AIO_SERVER_LEN + 1);
+    ESPAsync_WMParameter AIO_SERVERPORT_FIELD(AIO_SERVERPORT_Label, "AIO SERVER PORT", AIO_SERVERPORT, AIO_PORT_LEN + 1);
+    ESPAsync_WMParameter AIO_USERNAME_FIELD(AIO_USERNAME_Label, "AIO USERNAME", AIO_USERNAME, AIO_USERNAME_LEN + 1);
+    ESPAsync_WMParameter AIO_KEY_FIELD(AIO_KEY_Label, "AIO KEY", AIO_KEY, AIO_KEY_LEN + 1);
+
+    ESPAsync_WiFiManager->addParameter(&AIO_SERVER_FIELD);
+    ESPAsync_WiFiManager->addParameter(&AIO_SERVERPORT_FIELD);
+    ESPAsync_WiFiManager->addParameter(&AIO_USERNAME_FIELD);
+    ESPAsync_WiFiManager->addParameter(&AIO_KEY_FIELD);
+
     setupWiFiManager(ESPAsync_WiFiManager);
 
     Router_SSID = ESPAsync_WiFiManager->WiFi_SSID();
@@ -604,6 +684,20 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
         }
 
         saveConfigPortalCredentials(ESPAsync_WiFiManager);
+
+        strcpy(AIO_SERVER, AIO_SERVER_FIELD.getValue());
+        strcpy(AIO_SERVERPORT, AIO_SERVERPORT_FIELD.getValue());
+        strcpy(AIO_USERNAME, AIO_USERNAME_FIELD.getValue());
+        strcpy(AIO_KEY, AIO_KEY_FIELD.getValue());
+
+        saveMQTTConfig();
+        deleteOldInstances();
+
+        MQTTTopics[CO2_INDEX] = String(AIO_USERNAME) + "/co2";
+        MQTTTopics[HUMIDITY_INDEX] = String(AIO_USERNAME) + "/humidity";
+        MQTTTopics[TEMPERATURE_INDEX] = String(AIO_USERNAME) + "/temperature";
+
+        createNewInstances();
     }
 
     Serial.print("After waiting ");
@@ -623,11 +717,35 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     ESPAsync_WiFiManager->resetSettings();
     state->wifi_status = WL_DISCONNECTED;
 
+    ESPAsync_WMParameter AIO_SERVER_FIELD(AIO_SERVER_Label, "AIO SERVER", AIO_SERVER, AIO_SERVER_LEN + 1);
+    ESPAsync_WMParameter AIO_SERVERPORT_FIELD(AIO_SERVERPORT_Label, "AIO SERVER PORT", AIO_SERVERPORT, AIO_PORT_LEN + 1);
+    ESPAsync_WMParameter AIO_USERNAME_FIELD(AIO_USERNAME_Label, "AIO USERNAME", AIO_USERNAME, AIO_USERNAME_LEN + 1);
+    ESPAsync_WMParameter AIO_KEY_FIELD(AIO_KEY_Label, "AIO KEY", AIO_KEY, AIO_KEY_LEN + 1);
+
+    ESPAsync_WiFiManager->addParameter(&AIO_SERVER_FIELD);
+    ESPAsync_WiFiManager->addParameter(&AIO_SERVERPORT_FIELD);
+    ESPAsync_WiFiManager->addParameter(&AIO_USERNAME_FIELD);
+    ESPAsync_WiFiManager->addParameter(&AIO_KEY_FIELD);
+
     setupWiFiManager(ESPAsync_WiFiManager);
     Serial.println("Start Configuration Portal for reset.");
     ESPAsync_WiFiManager->setSaveConfigCallback(resetCallback);
     ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str());
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
+
+    strcpy(AIO_SERVER, AIO_SERVER_FIELD.getValue());
+    strcpy(AIO_SERVERPORT, AIO_SERVERPORT_FIELD.getValue());
+    strcpy(AIO_USERNAME, AIO_USERNAME_FIELD.getValue());
+    strcpy(AIO_KEY, AIO_KEY_FIELD.getValue());
+
+    saveMQTTConfig();
+    deleteOldInstances();
+
+    MQTTTopics[CO2_INDEX] = String(AIO_USERNAME) + "/co2";
+    MQTTTopics[HUMIDITY_INDEX] = String(AIO_USERNAME) + "/humidity";
+    MQTTTopics[TEMPERATURE_INDEX] = String(AIO_USERNAME) + "/temperature";
+
+    createNewInstances();
 }
 
 void resetCallback() {
@@ -678,7 +796,7 @@ bool areRouterCredentialsValid() {
 
 void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     ESPAsync_WiFiManager->setDebugOutput(true);
-    ESPAsync_WiFiManager->setAPStaticIPConfig(WM_AP_IPconfig); // set custom IP
+    ESPAsync_WiFiManager->setAPStaticIPConfig(WM_AP_IPconfig);
     ESPAsync_WiFiManager->setMinimumSignalQuality(-1);
     ESPAsync_WiFiManager->setConfigPortalChannel(0);
 
@@ -702,6 +820,80 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     ssid.toUpperCase();
 }
 
+void publishMQTT(struct state *state) {
+    MQTTConnect();
+    publishCO2->publish(state->co2_ppm);
+    publishHumidity->publish(state->humidity_percent);
+    publishTemperature->publish(state->temperature_celsius);
+}
+
+void MQTTConnect() {
+    MQTTTopics[CO2_INDEX] = String(AIO_USERNAME) + "/co2";
+    MQTTTopics[HUMIDITY_INDEX] = String(AIO_USERNAME) + "/humidity";
+    MQTTTopics[TEMPERATURE_INDEX] = String(AIO_USERNAME) + "/temperature";
+
+    createNewInstances();
+    if (mqtt->connected()) 
+        return;
+
+    uint8_t attempt = 3;
+    int8_t errorCode;
+  
+    while ((errorCode = mqtt->connect()) != 0) { 
+        Serial.println(mqtt->connectErrorString(errorCode));
+        mqtt->disconnect();
+        delay(2000); 
+        attempt--;
+        
+        if (attempt == 0) {
+            Serial.println("Could not connect to MQTT");
+            return;
+        }
+    }
+    
+    Serial.println(F("MQTT connection successful!"));
+}
+
+void deleteOldInstances() {
+    if (mqtt) {
+        delete mqtt;
+        mqtt = NULL;
+    }
+
+    if (publishCO2) {
+        delete publishCO2;
+        publishCO2 = NULL;
+    }
+
+    if (publishHumidity) {
+        delete publishHumidity;
+        publishHumidity = NULL;
+    }
+
+    if (publishTemperature) {
+        delete publishTemperature;
+        publishTemperature = NULL;
+    }
+}
+
+void createNewInstances() {
+    if (!client) 
+        client = new WiFiClient;
+    
+    if (!mqtt)
+        mqtt = new Adafruit_MQTT_Client(client, AIO_SERVER, atoi(AIO_SERVERPORT), AIO_USERNAME, AIO_KEY);
+
+    if (!publishCO2)
+        publishTemperature = new Adafruit_MQTT_Publish(mqtt, MQTTTopics[CO2_INDEX].c_str());
+
+    if (!publishHumidity)
+        publishTemperature = new Adafruit_MQTT_Publish(mqtt, MQTTTopics[HUMIDITY_INDEX].c_str());
+
+    if (!publishTemperature)
+        publishTemperature = new Adafruit_MQTT_Publish(mqtt, MQTTTopics[TEMPERATURE_INDEX].c_str());
+}
+
+
 void handleUpdate(struct state *oldstate, struct state *state) {
     if (state->is_requesting_update == oldstate->is_requesting_update)
         return;
@@ -724,7 +916,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
             return;
         }
 
-        WiFiClient* client = http.getStreamPtr();
+        WiFiClient *client = http.getStreamPtr();
         size_t written = Update.writeStream(*client);
 
         if (written == contentLen) {

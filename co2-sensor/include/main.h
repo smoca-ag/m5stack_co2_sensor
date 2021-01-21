@@ -25,6 +25,10 @@
 #include <HTTPClient.h>
 #include <Update.h>
 
+// mqtt
+#include <Adafruit_MQTT.h>
+#include <Adafruit_MQTT_Client.h>
+
 #include <smoca_logo.h>
 
 #define VERSION_NUMBER "1.0.0"
@@ -47,7 +51,23 @@
 #define TIME_SYNC_MIN rand() % 60
 
 #define STATE_FILENAME "/state"
+#define MQTT_FILENAME "/mqtt.json"
 #define CONFIG_FILENAME "/wifi_config"
+
+#define MQTT_TOPIC_COUNT 3
+#define CO2_INDEX 0
+#define TEMPERATURE_INDEX 1
+#define HUMIDITY_INDEX 2
+
+#define AIO_SERVER_Label "AIO_SERVER_Label"
+#define AIO_SERVERPORT_Label "AIO_SERVERPORT_Label"
+#define AIO_USERNAME_Label "AIO_USERNAME_Label"
+#define AIO_KEY_Label "AIO_KEY_Label"
+
+#define AIO_SERVER_LEN 20
+#define AIO_PORT_LEN 5
+#define AIO_USERNAME_LEN 40
+#define AIO_KEY_LEN 40
 
 String randomPassword();
 
@@ -77,6 +97,10 @@ void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 
+void loadMQTTConfig();
+
+void saveMQTTConfig();
+
 void loadConfigData();
 
 void saveConfigData();
@@ -96,6 +120,14 @@ void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 bool areRouterCredentialsValid();
 
 void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+
+void publishMQTT();
+
+void MQTTConnect();
+
+void deleteOldInstances();
+
+void createNewInstances();
 
 void handleUpdate(struct state *oldstate, struct state *state);
 
