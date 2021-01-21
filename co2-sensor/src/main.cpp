@@ -1347,15 +1347,14 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
 }
 
 void hideButtons() {
-    for (int i = 0; i < Button::instances.size(); i++) {
-        if (Button::instances[i]->getName() == M5.BtnA.getName() ||
-            Button::instances[i]->getName() == M5.BtnB.getName() ||
-            Button::instances[i]->getName() == M5.BtnC.getName() ||
-            Button::instances[i]->getName() == M5.background.getName()
-                ) {
+    for (Button* button : Button::instances) {
+        if (button->getName() == M5.BtnA.getName() ||
+            button->getName() == M5.BtnB.getName() ||
+            button->getName() == M5.BtnC.getName() ||
+            button->getName() == M5.background.getName())
             continue;
-        }
-        Button::instances[i]->hide();
+            
+        button->hide();
     }
 }
 
