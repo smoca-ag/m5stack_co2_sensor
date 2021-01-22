@@ -91,6 +91,7 @@ struct state {
     bool is_requesting_update = false;
     enum info update_info = infoEmpty;
     String newest_version;
+    bool is_mqtt_connected = false;
     char mqttServer[MQTT_SERVER_LEN];
     char mqttPort[MQTT_PORT_LEN];
     char mqttDevice[MQTT_DEVICENAME_LEN];
@@ -222,7 +223,6 @@ void loop() {
     struct state oldstate;
     memcpy(&oldstate, &state, sizeof(struct state));
     M5.update();
-    mqtt.loop();
 
     updateTouch(&state);
     updateTime(&state);
@@ -233,6 +233,7 @@ void loop() {
     updatePassword(&state);
     updateWiFiState(&oldstate, &state);
     updateTimeState(&oldstate, &state);
+    updateMQTT(&state);
 
     syncData(&state);
     saveStateFile(&oldstate, &state);
@@ -1130,6 +1131,13 @@ void updateTimeState(struct state *oldstate, struct state *state) {
         state->is_sync_needed = true;
 }
 
+void updateMQTT(struct state *state) {
+    if (mqtt.loop())
+        state->is_mqtt_connected = true;
+    else
+        state->is_mqtt_connected = false;
+}
+
 void createSprites() {
     DisbuffHeader.createSprite(320, 26);
     DisbuffHeader.setFreeFont(&FreeMono9pt7b);
@@ -1456,6 +1464,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
 
 void drawMQTTSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
+        state->is_mqtt_connected == oldstate->is_mqtt_connected &&
         state->mqttServer == oldstate->mqttServer &&
         state->mqttPort == oldstate->mqttPort &&
         state->mqttDevice == oldstate->mqttDevice &&
@@ -1472,13 +1481,13 @@ void drawMQTTSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
-    if (mqtt.connected()) {
+    if (state->is_mqtt_connected) {
         DisbuffBody.setTextColor(GREEN);
-        DisbuffBody.drawString("Connected", 90, 80);
+        DisbuffBody.drawString("Connected", 95, 80);
         DisbuffBody.setTextColor(WHITE);
     } else {
         DisbuffBody.setTextColor(RED);
-        DisbuffBody.drawString("Not Connected", 80, 80);
+        DisbuffBody.drawString("Not Connected", 85, 80);
         DisbuffBody.setTextColor(WHITE);
     }
 

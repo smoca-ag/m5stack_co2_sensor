@@ -149,6 +149,8 @@ void updateWiFiState(struct state *oldstate, struct state *state);
 
 void updateTimeState(struct state *oldstate, struct state *state);
 
+void updateMQTT(struct state *state);
+
 void createSprites();
 
 uint16_t co2color(int value);
