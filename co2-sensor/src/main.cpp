@@ -44,6 +44,7 @@ enum menuMode {
     menuModeCalibrationSettings,
     menuModeCalibrationAlert,
     menuModeWiFiSettings,
+    menuModeMQTTSettings,
     menuModeTimeSettings,
     menuModeUpdateSettings
 };
@@ -607,6 +608,10 @@ void handleNavigation(struct state *state) {
             break;
 
         case menuModeWiFiSettings:
+            state->menu_mode = menuModeMQTTSettings;
+            break;
+
+        case menuModeMQTTSettings:
             state->menu_mode = menuModeTimeSettings;
             break;
 
@@ -1182,6 +1187,9 @@ void drawScreen(struct state *oldstate, struct state *state) {
             state->cal_info = infoEmpty;
             clearScreen(oldstate, state);
             drawWiFiSettings(oldstate, state);
+        } else if(state->menu_mode == menuModeMQTTSettings) {
+            clearScreen(oldstate, state);
+            drawMQTTSettings(oldstate, state);
         } else if (state->menu_mode == menuModeTimeSettings) {
             clearScreen(oldstate, state);
             drawSyncSettings(oldstate, state);
@@ -1374,12 +1382,12 @@ void drawCalibrationAlert(struct state *oldstate, struct state *state) {
 
     DisbuffBody.setFreeFont(&FreeMono12pt7b);
     String ppm = String(state->calibration_value) + "ppm";
-    String info1 = "Change Calibration";
-    String info2 = "to " + ppm + " ?";
-    String info3 = "This can't be undone.";
-    DisbuffBody.drawString(info1, 30, 55);
-    DisbuffBody.drawString(info2, 85, 80);
-    DisbuffBody.drawString(info3, 20, 105);
+    String info0 = "Change Calibration";
+    String info1 = "to " + ppm + " ?";
+    String info2 = "This can't be undone.";
+    DisbuffBody.drawString(info0, 30, 55);
+    DisbuffBody.drawString(info1, 85, 80);
+    DisbuffBody.drawString(info2, 20, 105);
 
     DisbuffBody.pushSprite(0, 26);
 
@@ -1446,6 +1454,49 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
         resetWiFiButton.draw();
 }
 
+void drawMQTTSettings(struct state *oldstate, struct state *state) {
+    if (state->display_sleep == oldstate->display_sleep &&
+        state->mqttServer == oldstate->mqttServer &&
+        state->mqttPort == oldstate->mqttPort &&
+        state->mqttDevice == oldstate->mqttDevice &&
+        state->menu_mode == oldstate->menu_mode)
+        return;
+
+    DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+    DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
+    DisbuffBody.setTextColor(WHITE);
+    DisbuffBody.setTextSize(2);
+    DisbuffBody.drawString("MQTT", 75, 10);
+
+    DisbuffBody.setFreeFont(&FreeMono9pt7b);
+    DisbuffBody.setTextSize(1);
+
+    if (mqtt.connected()) {
+        DisbuffBody.setTextColor(GREEN);
+        DisbuffBody.drawString("Connected", 90, 80);
+        DisbuffBody.setTextColor(WHITE);
+    } else {
+        DisbuffBody.setTextColor(RED);
+        DisbuffBody.drawString("Not Connected", 80, 80);
+        DisbuffBody.setTextColor(WHITE);
+    }
+
+    String server = ((String)state->mqttServer == "" ? "N/A" : (String)state->mqttServer);
+    String port = (String)state->mqttPort == "" ? "N/A" : (String)state->mqttPort;
+    String user = (String)state->mqttUser == "" ? "N/A" : ssid;
+
+    String info0 = "Server: " + (server.length() > 18 ? (server.substring(0, 14) + "...") : server);
+    String info1 = "Port: " + port;
+    String info2 = "User: " + (user.length() > 18 ? (user.substring(0, 14) + "...") : user);
+
+    DisbuffBody.drawString(info0, 15, 100);
+    DisbuffBody.drawString(info1, 15, 115);
+    DisbuffBody.drawString(info2, 15, 130);
+
+    DisbuffBody.pushSprite(0, 26);
+}
+
 void drawSyncSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->wifi_status == oldstate->wifi_status &&
@@ -1507,10 +1558,10 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
-    String info1 = "Version: " + (String) VERSION_NUMBER;
-    String info2 = "Newest: " + (state->newest_version == "" ? "N/A" : state->newest_version);
-    DisbuffBody.drawString(info1, 80, 80);
-    DisbuffBody.drawString(info2, 85, 100);
+    String info0 = "Version: " + (String) VERSION_NUMBER;
+    String info1 = "Newest: " + (state->newest_version == "" ? "N/A" : state->newest_version);
+    DisbuffBody.drawString(info0, 80, 80);
+    DisbuffBody.drawString(info1, 85, 100);
 
     if (state->update_info == infoUpdateFailed) {
         DisbuffBody.setTextColor(RED);
