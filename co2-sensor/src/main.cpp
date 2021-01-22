@@ -152,18 +152,13 @@ DNSServer dnsServer;
 String Router_SSID;
 String Router_Pass;
 
-String MQTTTopics[MQTT_TOPIC_COUNT];
+char MQTT_SERVER[MQTT_SERVER_LEN];
+char MQTT_SERVERPORT[MQTT_PORT_LEN];
+char MQTT_USERNAME[MQTT_USERNAME_LEN];
+char MQTT_KEY[MQTT_KEY_LEN];
 
-char AIO_SERVER[AIO_SERVER_LEN];
-char AIO_SERVERPORT[AIO_PORT_LEN];
-char AIO_USERNAME[AIO_USERNAME_LEN];
-char AIO_KEY[AIO_KEY_LEN];
-
-WiFiClient *client = NULL;
-Adafruit_MQTT_Client *mqtt = NULL;
-Adafruit_MQTT_Publish *publishCO2 = NULL;
-Adafruit_MQTT_Publish *publishHumidity = NULL;
-Adafruit_MQTT_Publish *publishTemperature = NULL;
+WiFiClient client = NULL;
+PubSubClient mqtt(client);
 
 // statistics
 unsigned long cycle;
@@ -239,7 +234,7 @@ void loop() {
 
     drawScreen(&oldstate, &state);
     handleWiFi(&oldstate, &state);
-    checkWiFiStatus();
+    checkIntervals(&state);
     handleUpdate(&oldstate, &state);
 
     writeSsd(&state);
@@ -399,16 +394,27 @@ void initAirSensor() {
     airSensor.setAltitudeCompensation(440);
 }
 
-void checkWiFiStatus() {
+void checkIntervals(struct state *state) {
+#define WIFICHECK_INTERVAL 1000L
+#define MQTT_PUBLISH_INTERVAL 60000L
+
     static ulong checkwifi_timeout = 0;
+    static ulong checkmqtt_timeout = 0;
     static ulong current_millis;
 
-#define WIFICHECK_INTERVAL 1000L
+
     current_millis = millis();
 
     if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
         checkWiFi();
         checkwifi_timeout = current_millis + WIFICHECK_INTERVAL;
+    }
+
+    if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
+        if (state->wifi_status == WL_CONNECTED)
+            publishMQTT(state);
+
+        checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
     }
 }
 
@@ -484,7 +490,8 @@ void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
                 in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
 #else
     // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn);
+    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw,
+                in_WM_STA_IPconfig._sta_static_sn);
 #endif
 }
 
@@ -511,34 +518,33 @@ void loadMQTTConfig() {
 
     DynamicJsonDocument json(1024);
     DeserializationError error = deserializeJson(json, buf.get());
-    
+
     if (error) {
         Serial.print(F("deserializeJson() failed: "));
         Serial.println(error.f_str());
         return;
     }
 
-    if (json.containsKey(AIO_SERVER_Label))
-        strcpy(AIO_SERVER, json[AIO_SERVER_Label]);
+    if (json.containsKey(MQTT_SERVER_Label))
+        strcpy(MQTT_SERVER, json[MQTT_SERVER_Label]);
 
-    if (json.containsKey(AIO_SERVERPORT_Label))
-        strcpy(AIO_SERVERPORT, json[AIO_SERVERPORT_Label]);
+    if (json.containsKey(MQTT_SERVERPORT_Label))
+        strcpy(MQTT_SERVERPORT, json[MQTT_SERVERPORT_Label]);
 
-    if (json.containsKey(AIO_USERNAME_Label))
-        strcpy(AIO_USERNAME, json[AIO_USERNAME_Label]);
+    if (json.containsKey(MQTT_USERNAME_Label))
+        strcpy(MQTT_USERNAME, json[MQTT_USERNAME_Label]);
 
-    if (json.containsKey(AIO_KEY_Label))
-        strcpy(AIO_KEY, json[AIO_KEY_Label]);
-
+    if (json.containsKey(MQTT_KEY_Label))
+        strcpy(MQTT_KEY, json[MQTT_KEY_Label]);
 }
 
 void saveMQTTConfig() {
     DynamicJsonDocument json(1024);
 
-    json[AIO_SERVER_Label] = AIO_SERVER;
-    json[AIO_SERVERPORT_Label] = AIO_SERVERPORT;
-    json[AIO_USERNAME_Label] = AIO_USERNAME;
-    json[AIO_KEY_Label] = AIO_KEY;
+    json[MQTT_SERVER_Label] = MQTT_SERVER;
+    json[MQTT_SERVERPORT_Label] = MQTT_SERVERPORT;
+    json[MQTT_USERNAME_Label] = MQTT_USERNAME;
+    json[MQTT_KEY_Label] = MQTT_KEY;
 
     File file = SPIFFS.open(MQTT_FILENAME, "w");
 
@@ -549,7 +555,6 @@ void saveMQTTConfig() {
 
     serializeJson(json, file);
     file.close();
-    
 }
 
 void loadConfigData() {
@@ -633,15 +638,15 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
                       struct state *state) {
     unsigned long startedAt = millis();
 
-    ESPAsync_WMParameter AIO_SERVER_FIELD(AIO_SERVER_Label, "AIO SERVER", AIO_SERVER, AIO_SERVER_LEN + 1);
-    ESPAsync_WMParameter AIO_SERVERPORT_FIELD(AIO_SERVERPORT_Label, "AIO SERVER PORT", AIO_SERVERPORT, AIO_PORT_LEN + 1);
-    ESPAsync_WMParameter AIO_USERNAME_FIELD(AIO_USERNAME_Label, "AIO USERNAME", AIO_USERNAME, AIO_USERNAME_LEN + 1);
-    ESPAsync_WMParameter AIO_KEY_FIELD(AIO_KEY_Label, "AIO KEY", AIO_KEY, AIO_KEY_LEN + 1);
+    ESPAsync_WMParameter MQTT_SERVER_FIELD(MQTT_SERVER_Label, "MQTT Server", MQTT_SERVER, MQTT_SERVER_LEN + 1);
+    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport", MQTT_SERVERPORT, MQTT_PORT_LEN + 1);
+    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", MQTT_USERNAME, MQTT_USERNAME_LEN + 1);
+    ESPAsync_WMParameter MQTT_KEY_FIELD(MQTT_KEY_Label, "MQTT Password", MQTT_KEY, MQTT_KEY_LEN + 1);
 
-    ESPAsync_WiFiManager->addParameter(&AIO_SERVER_FIELD);
-    ESPAsync_WiFiManager->addParameter(&AIO_SERVERPORT_FIELD);
-    ESPAsync_WiFiManager->addParameter(&AIO_USERNAME_FIELD);
-    ESPAsync_WiFiManager->addParameter(&AIO_KEY_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_SERVER_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_SERVERPORT_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_USERNAME_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_KEY_FIELD);
 
     setupWiFiManager(ESPAsync_WiFiManager);
 
@@ -685,19 +690,12 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
 
         saveConfigPortalCredentials(ESPAsync_WiFiManager);
 
-        strcpy(AIO_SERVER, AIO_SERVER_FIELD.getValue());
-        strcpy(AIO_SERVERPORT, AIO_SERVERPORT_FIELD.getValue());
-        strcpy(AIO_USERNAME, AIO_USERNAME_FIELD.getValue());
-        strcpy(AIO_KEY, AIO_KEY_FIELD.getValue());
+        strcpy(MQTT_SERVER, MQTT_SERVER_FIELD.getValue());
+        strcpy(MQTT_SERVERPORT, MQTT_SERVERPORT_FIELD.getValue());
+        strcpy(MQTT_USERNAME, MQTT_USERNAME_FIELD.getValue());
+        strcpy(MQTT_KEY, MQTT_KEY_FIELD.getValue());
 
         saveMQTTConfig();
-        deleteOldInstances();
-
-        MQTTTopics[CO2_INDEX] = String(AIO_USERNAME) + "/co2";
-        MQTTTopics[HUMIDITY_INDEX] = String(AIO_USERNAME) + "/humidity";
-        MQTTTopics[TEMPERATURE_INDEX] = String(AIO_USERNAME) + "/temperature";
-
-        createNewInstances();
     }
 
     Serial.print("After waiting ");
@@ -717,15 +715,15 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     ESPAsync_WiFiManager->resetSettings();
     state->wifi_status = WL_DISCONNECTED;
 
-    ESPAsync_WMParameter AIO_SERVER_FIELD(AIO_SERVER_Label, "AIO SERVER", AIO_SERVER, AIO_SERVER_LEN + 1);
-    ESPAsync_WMParameter AIO_SERVERPORT_FIELD(AIO_SERVERPORT_Label, "AIO SERVER PORT", AIO_SERVERPORT, AIO_PORT_LEN + 1);
-    ESPAsync_WMParameter AIO_USERNAME_FIELD(AIO_USERNAME_Label, "AIO USERNAME", AIO_USERNAME, AIO_USERNAME_LEN + 1);
-    ESPAsync_WMParameter AIO_KEY_FIELD(AIO_KEY_Label, "AIO KEY", AIO_KEY, AIO_KEY_LEN + 1);
+    ESPAsync_WMParameter MQTT_SERVER_FIELD(MQTT_SERVER_Label, "MQTT Server", MQTT_SERVER, MQTT_SERVER_LEN + 1);
+    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport", MQTT_SERVERPORT, MQTT_PORT_LEN + 1);
+    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", MQTT_USERNAME, MQTT_USERNAME_LEN + 1);
+    ESPAsync_WMParameter MQTT_KEY_FIELD(MQTT_KEY_Label, "MQTT Password", MQTT_KEY, MQTT_KEY_LEN + 1);
 
-    ESPAsync_WiFiManager->addParameter(&AIO_SERVER_FIELD);
-    ESPAsync_WiFiManager->addParameter(&AIO_SERVERPORT_FIELD);
-    ESPAsync_WiFiManager->addParameter(&AIO_USERNAME_FIELD);
-    ESPAsync_WiFiManager->addParameter(&AIO_KEY_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_SERVER_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_SERVERPORT_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_USERNAME_FIELD);
+    ESPAsync_WiFiManager->addParameter(&MQTT_KEY_FIELD);
 
     setupWiFiManager(ESPAsync_WiFiManager);
     Serial.println("Start Configuration Portal for reset.");
@@ -733,19 +731,12 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str());
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
 
-    strcpy(AIO_SERVER, AIO_SERVER_FIELD.getValue());
-    strcpy(AIO_SERVERPORT, AIO_SERVERPORT_FIELD.getValue());
-    strcpy(AIO_USERNAME, AIO_USERNAME_FIELD.getValue());
-    strcpy(AIO_KEY, AIO_KEY_FIELD.getValue());
+    strcpy(MQTT_SERVER, MQTT_SERVER_FIELD.getValue());
+    strcpy(MQTT_SERVERPORT, MQTT_SERVERPORT_FIELD.getValue());
+    strcpy(MQTT_USERNAME, MQTT_USERNAME_FIELD.getValue());
+    strcpy(MQTT_KEY, MQTT_KEY_FIELD.getValue());
 
     saveMQTTConfig();
-    deleteOldInstances();
-
-    MQTTTopics[CO2_INDEX] = String(AIO_USERNAME) + "/co2";
-    MQTTTopics[HUMIDITY_INDEX] = String(AIO_USERNAME) + "/humidity";
-    MQTTTopics[TEMPERATURE_INDEX] = String(AIO_USERNAME) + "/temperature";
-
-    createNewInstances();
 }
 
 void resetCallback() {
@@ -822,84 +813,42 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
 
 void publishMQTT(struct state *state) {
     MQTTConnect();
-    publishCO2->publish(state->co2_ppm);
-    publishHumidity->publish(state->humidity_percent);
-    publishTemperature->publish(state->temperature_celsius);
+    String co2 = (String)state->co2_ppm;
+    String humidity = (String)state->humidity_percent;
+    String temperature = (String)state->temperature_celsius;
+
+    mqtt.publish(TOPIC_CO2, co2.c_str());
+    mqtt.publish(TOPIC_HUMIDITY, humidity.c_str());
+    mqtt.publish(TOPIC_TEMPERATURE, temperature.c_str());
 }
 
 void MQTTConnect() {
-    MQTTTopics[CO2_INDEX] = String(AIO_USERNAME) + "/co2";
-    MQTTTopics[HUMIDITY_INDEX] = String(AIO_USERNAME) + "/humidity";
-    MQTTTopics[TEMPERATURE_INDEX] = String(AIO_USERNAME) + "/temperature";
-
-    createNewInstances();
-    if (mqtt->connected()) 
+    if (mqtt.connected())
         return;
 
-    uint8_t attempt = 3;
-    int8_t errorCode;
-  
-    while ((errorCode = mqtt->connect()) != 0) { 
-        Serial.println(mqtt->connectErrorString(errorCode));
-        mqtt->disconnect();
-        delay(2000); 
-        attempt--;
-        
-        if (attempt == 0) {
-            Serial.println("Could not connect to MQTT");
+    mqtt.setClient(client);
+    mqtt.setServer(MQTT_SERVER, (int)MQTT_SERVERPORT);
+
+    for (int i = 0; i < 3; i++) {
+        if (mqtt.connect(ssid.c_str())) {
+            Serial.println(F("MQTT connection successful!"));
             return;
         }
+
+        Serial.print("MQTT connection failed: ");
+        Serial.println(mqtt.state());
+        delay(1000);
     }
-    
-    Serial.println(F("MQTT connection successful!"));
+
+    Serial.println("Could not connect to MQTT");
 }
-
-void deleteOldInstances() {
-    if (mqtt) {
-        delete mqtt;
-        mqtt = NULL;
-    }
-
-    if (publishCO2) {
-        delete publishCO2;
-        publishCO2 = NULL;
-    }
-
-    if (publishHumidity) {
-        delete publishHumidity;
-        publishHumidity = NULL;
-    }
-
-    if (publishTemperature) {
-        delete publishTemperature;
-        publishTemperature = NULL;
-    }
-}
-
-void createNewInstances() {
-    if (!client) 
-        client = new WiFiClient;
-    
-    if (!mqtt)
-        mqtt = new Adafruit_MQTT_Client(client, AIO_SERVER, atoi(AIO_SERVERPORT), AIO_USERNAME, AIO_KEY);
-
-    if (!publishCO2)
-        publishTemperature = new Adafruit_MQTT_Publish(mqtt, MQTTTopics[CO2_INDEX].c_str());
-
-    if (!publishHumidity)
-        publishTemperature = new Adafruit_MQTT_Publish(mqtt, MQTTTopics[HUMIDITY_INDEX].c_str());
-
-    if (!publishTemperature)
-        publishTemperature = new Adafruit_MQTT_Publish(mqtt, MQTTTopics[TEMPERATURE_INDEX].c_str());
-}
-
 
 void handleUpdate(struct state *oldstate, struct state *state) {
     if (state->is_requesting_update == oldstate->is_requesting_update)
         return;
 
     if (state->is_requesting_update && state->wifi_status == WL_CONNECTED) {
-        String firmwareFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_FIRMWARE_FILE;
+        String firmwareFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_FIRMWARE_FILE;
         HTTPClient http;
         http.begin(firmwareFile);
         int httpCode = http.GET();
@@ -920,9 +869,9 @@ void handleUpdate(struct state *oldstate, struct state *state) {
         size_t written = Update.writeStream(*client);
 
         if (written == contentLen) {
-            Serial.println("Written " + (String)written + " successfully");
+            Serial.println("Written " + (String) written + " successfully");
         } else {
-            Serial.println("Written only " + (String)written + "/" + (String)contentLen + ". Canceling.");
+            Serial.println("Written only " + (String) written + "/" + (String) contentLen + ". Canceling.");
             return;
         }
 
@@ -930,9 +879,9 @@ void handleUpdate(struct state *oldstate, struct state *state) {
             if (Update.isFinished()) {
                 Serial.println("Update was successful. Rebooting.");
                 ESP.restart();
-            } else 
+            } else
                 Serial.println("Error Occurred. Error #: " + String(Update.getError()));
-        } else 
+        } else
             Serial.println("Error Occurred. Error #: " + String(Update.getError()));
 
         http.end();
@@ -942,7 +891,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
 void fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
         HTTPClient http;
-        String versionFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_VERSION_FILE;
+        String versionFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_VERSION_FILE;
         http.begin(versionFile);
         int httpCode = http.GET();
 
@@ -951,7 +900,7 @@ void fetchRemoteVersion(struct state *state) {
             Serial.println(http.errorToString(httpCode));
             return;
         }
-        
+
         WiFiClient client = http.getStream();
 
         StaticJsonDocument<128> doc;
@@ -964,7 +913,7 @@ void fetchRemoteVersion(struct state *state) {
 
         state->newest_version = doc["version"].as<String>();
         http.end();
-    } 
+    }
 }
 
 void updateTouch(struct state *state) {
@@ -1137,7 +1086,7 @@ void updateTimeState(struct state *oldstate, struct state *state) {
     if (state->current_time.tm_min == oldstate->current_time.tm_min)
         return;
 
-    if (mktime(&state->current_time) > mktime(&state->next_time_sync)) 
+    if (mktime(&state->current_time) > mktime(&state->next_time_sync))
         state->is_sync_needed = true;
 }
 
@@ -1512,7 +1461,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
-    String info1 = "Version: " + (String)VERSION_NUMBER;
+    String info1 = "Version: " + (String) VERSION_NUMBER;
     String info2 = "Newest: " + (state->newest_version == "" ? "N/A" : state->newest_version);
     DisbuffBody.drawString(info1, 80, 80);
     DisbuffBody.drawString(info2, 85, 100);
@@ -1521,7 +1470,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
         DisbuffBody.setTextColor(RED);
         DisbuffBody.drawString("Update failed!", 40, 120);
     }
-    
+
     if (state->wifi_status != WL_CONNECTED) {
         DisbuffBody.setTextColor(RED);
         DisbuffBody.drawString("Can not update device", 35, 150);

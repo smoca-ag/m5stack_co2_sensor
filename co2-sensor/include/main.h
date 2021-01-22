@@ -26,8 +26,7 @@
 #include <Update.h>
 
 // mqtt
-#include <Adafruit_MQTT.h>
-#include <Adafruit_MQTT_Client.h>
+#include <PubSubClient.h>
 
 #include <smoca_logo.h>
 
@@ -54,20 +53,19 @@
 #define MQTT_FILENAME "/mqtt.json"
 #define CONFIG_FILENAME "/wifi_config"
 
-#define MQTT_TOPIC_COUNT 3
-#define CO2_INDEX 0
-#define TEMPERATURE_INDEX 1
-#define HUMIDITY_INDEX 2
+#define TOPIC_CO2 "co2"
+#define TOPIC_HUMIDITY "humidity"
+#define TOPIC_TEMPERATURE "temperature"
 
-#define AIO_SERVER_Label "AIO_SERVER_Label"
-#define AIO_SERVERPORT_Label "AIO_SERVERPORT_Label"
-#define AIO_USERNAME_Label "AIO_USERNAME_Label"
-#define AIO_KEY_Label "AIO_KEY_Label"
+#define MQTT_SERVER_Label "MQTT_SERVER_Label"
+#define MQTT_SERVERPORT_Label "MQTT_SERVERPORT_Label"
+#define MQTT_USERNAME_Label "MQTT_USERNAME_Label"
+#define MQTT_KEY_Label "MQTT_KEY_Label"
 
-#define AIO_SERVER_LEN 20
-#define AIO_PORT_LEN 5
-#define AIO_USERNAME_LEN 40
-#define AIO_KEY_LEN 40
+#define MQTT_SERVER_LEN 20
+#define MQTT_PORT_LEN 5
+#define MQTT_USERNAME_LEN 40
+#define MQTT_KEY_LEN 40
 
 String randomPassword();
 
@@ -85,7 +83,7 @@ void initSD();
 
 void initAirSensor();
 
-void checkWiFiStatus();
+void checkIntervals(struct state *state);
 
 void checkWiFi();
 
@@ -121,7 +119,7 @@ bool areRouterCredentialsValid();
 
 void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
-void publishMQTT();
+void publishMQTT(struct state *state);
 
 void MQTTConnect();
 
