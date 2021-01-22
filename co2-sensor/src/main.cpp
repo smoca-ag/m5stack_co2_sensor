@@ -408,7 +408,6 @@ void checkIntervals(struct state *state) {
     static ulong checkmqtt_timeout = 0;
     static ulong current_millis;
 
-
     current_millis = millis();
 
     if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
@@ -417,7 +416,7 @@ void checkIntervals(struct state *state) {
     }
 
     if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
-        if (state->wifi_status == WL_CONNECTED)
+        if (state->wifi_status == WL_CONNECTED && state->mqttServer != "" && state->mqttPort != "")
             publishMQTT(state);
 
         checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
