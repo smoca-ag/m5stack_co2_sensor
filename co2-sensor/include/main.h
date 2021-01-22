@@ -59,11 +59,13 @@
 
 #define MQTT_SERVER_Label "MQTT_SERVER_Label"
 #define MQTT_SERVERPORT_Label "MQTT_SERVERPORT_Label"
+#define MQTT_DEVICENAME_Label "MQTT_DEVICENAME_Label"
 #define MQTT_USERNAME_Label "MQTT_USERNAME_Label"
 #define MQTT_KEY_Label "MQTT_KEY_Label"
 
 #define MQTT_SERVER_LEN 20
 #define MQTT_PORT_LEN 5
+#define MQTT_DEVICENAME_LEN 40
 #define MQTT_USERNAME_LEN 40
 #define MQTT_KEY_LEN 40
 
@@ -71,7 +73,7 @@ String randomPassword();
 
 void loadStateFile();
 
-void saveStateFile();
+void saveStateFile(struct state *oldstate, struct state *state);
 
 void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig);
 
@@ -97,7 +99,7 @@ void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 
 void loadMQTTConfig();
 
-void saveMQTTConfig();
+void saveMQTTConfig(struct state *state);
 
 void loadConfigData();
 
@@ -121,11 +123,7 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
 void publishMQTT(struct state *state);
 
-void MQTTConnect();
-
-void deleteOldInstances();
-
-void createNewInstances();
+bool MQTTConnect(struct state *state);
 
 void handleUpdate(struct state *oldstate, struct state *state);
 
