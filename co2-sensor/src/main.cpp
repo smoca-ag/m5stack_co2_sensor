@@ -829,8 +829,17 @@ void MQTTConnect() {
     if (mqtt.connected())
         return;
 
+    if (!client.connect(MQTT_SERVER, (int)MQTT_SERVERPORT)) {
+        Serial.println("MQTT connection failed");
+        return;
+    }
+
+    if (!client.available()) {
+        Serial.println("MQTT Server not available");
+        return;
+    }
+
     mqtt.setClient(client);
-    mqtt.setServer(MQTT_SERVER, (int)MQTT_SERVERPORT);
 
     for (int i = 0; i < 3; i++) {
         if (mqtt.connect(ssid.c_str())) {
