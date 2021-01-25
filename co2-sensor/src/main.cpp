@@ -428,7 +428,6 @@ void checkIntervals(struct state *state) {
             if (!MQTTConnect(state))
                 return;
             publishMQTT(state);
-            mqtt.disconnect();
         } else
             Serial.println("MQTT not configured.");
 
@@ -964,7 +963,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
     }
 }
 
-void fetchRemoteVersion(struct state *state) {
+bool fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
         HTTPClient http;
         String versionFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_VERSION_FILE;
@@ -974,7 +973,7 @@ void fetchRemoteVersion(struct state *state) {
         if (httpCode <= 0) {
             Serial.print("Fetching version failed, error: ");
             Serial.println(http.errorToString(httpCode));
-            return;
+            return false;
         }
 
         WiFiClient client = http.getStream();
@@ -984,12 +983,14 @@ void fetchRemoteVersion(struct state *state) {
         if (error) {
             Serial.print("deserializeJson() failed: ");
             Serial.println(error.f_str());
-            return;
+            return false;
         }
 
         state->newest_version = doc["version"].as<String>();
         http.end();
+        return true;
     }
+    return false;
 }
 
 void updateTouch(struct state *state) {
@@ -1726,29 +1727,33 @@ void syncData(struct state *state) {
         return;
 
     if (state->force_sync) {
-        fetchRemoteVersion(state);
-        setRtc(state);
+        if (fetchRemoteVersion(state) && setRtc(state))
+            state->time_info = infoTimeSyncSuccess;
+        else 
+            state->time_info = infoTimeSyncFailed;
         state->force_sync = false;
     } else if (state->is_sync_needed) {
-        fetchRemoteVersion(state);
-        setRtc(state);
-        getLocalTime(&(state->current_time));
-        state->next_time_sync = state->current_time;
-        state->next_time_sync.tm_mday++;
-        state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
-        state->next_time_sync.tm_min = TIME_SYNC_MIN;
+         if (fetchRemoteVersion(state) && setRtc(state)) {
+            state->time_info = infoTimeSyncSuccess;
+            getLocalTime(&(state->current_time));
+            state->next_time_sync = state->current_time;
+            state->next_time_sync.tm_mday++;
+            state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
+            state->next_time_sync.tm_min = TIME_SYNC_MIN;
+         } else 
+            state->time_info = infoTimeSyncFailed;
+        
         state->is_sync_needed = false;
     }
 }
 
-void setRtc(struct state *state) {
+bool setRtc(struct state *state) {
     configTime(0, 0, "pool.ntp.org");
 
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
         Serial.println("Failed to obtain time");
-        state->time_info = infoTimeSyncFailed;
-        return;
+        return false;
     }
 
     RTC_TimeTypeDef rtctime;
@@ -1765,7 +1770,7 @@ void setRtc(struct state *state) {
     M5.Rtc.SetTime(&rtctime);
     Serial.print("Synced time to: ");
     Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-    state->time_info = infoTimeSyncSuccess;
+    return true;
 }
 
 void setTimeFromRtc() {

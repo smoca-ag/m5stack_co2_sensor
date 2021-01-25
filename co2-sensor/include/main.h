@@ -131,7 +131,7 @@ bool MQTTConnect(struct state *state);
 
 void handleUpdate(struct state *oldstate, struct state *state);
 
-void fetchRemoteVersion(struct state *state);
+bool fetchRemoteVersion(struct state *state);
 
 void updateTouch(struct state *state);
 
@@ -195,7 +195,7 @@ void printTime();
 
 void syncData(struct state *state);
 
-void setRtc(struct state *state);
+bool setRtc(struct state *state);
 
 void setTimeFromRtc();
 
