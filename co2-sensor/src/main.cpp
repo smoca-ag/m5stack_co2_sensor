@@ -428,6 +428,7 @@ void checkIntervals(struct state *state) {
             if (!MQTTConnect(state))
                 return;
             publishMQTT(state);
+            mqtt.disconnect();
         } else
             Serial.println("MQTT not configured.");
 
