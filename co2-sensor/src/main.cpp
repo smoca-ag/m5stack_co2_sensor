@@ -49,6 +49,7 @@ enum menuMode {
 };
 
 enum info {
+    infoCalSuccess,
     infoConfigPortalCredentials,
     infoWiFiConnected,
     infoWiFiFailed,
@@ -76,6 +77,7 @@ struct state {
     enum menuMode menu_mode = menuModeGraphs;
     bool auto_calibration_on = false;
     int calibration_value = 400;
+    enum info cal_info = infoEmpty;
     bool is_wifi_activated = false;
     bool is_requesting_reset = false;
     wl_status_t wifi_status = WL_DISCONNECTED;
@@ -114,13 +116,13 @@ Button co2Button(0, 26, 320, 88);
 Button midLeftButton(-2, 104, 163, 40, false, "midLeft", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 Button midRightButton(161, 104, 164, 40, false, "midRight", offWhite, onWhite, BUTTON_DATUM, 0, 0, 0);
 
-Button toggleAutoCalButton(15, 166, 130, 50, false, "Auto Cal: OFF", offRed, onRed);
-Button submitCalibrationButton(175, 166, 130, 50, false, "Calibrate", offCyan, onCyan);
+Button toggleAutoCalButton(15, 175, 130, 50, false, "Auto Cal: OFF", offRed, onRed);
+Button submitCalibrationButton(175, 175, 130, 50, false, "Calibrate", offCyan, onCyan);
 
-Button toggleWiFiButton(20, 166, 120, 50, false, "OFF", offRed, onRed);
-Button resetWiFiButton(180, 166, 120, 50, false, "Reset", offCyan, onCyan);
+Button toggleWiFiButton(20, 175, 120, 50, false, "OFF", offRed, onRed);
+Button resetWiFiButton(180, 175, 120, 50, false, "Reset", offCyan, onCyan);
 
-Button syncTimeButton(20, 166, 280, 50, false, "Sync Time", offCyan, onCyan);
+Button syncTimeButton(20, 175, 280, 50, false, "Sync Time", offCyan, onCyan);
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
@@ -471,7 +473,8 @@ void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
                 in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
 #else
     // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn);
+    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw,
+                in_WM_STA_IPconfig._sta_static_sn);
 #endif
 }
 
@@ -537,6 +540,7 @@ void handleNavigation(struct state *state) {
             break;
 
         default:
+            state->menu_mode = menuModeGraphs;
             break;
     }
 }
@@ -707,7 +711,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
         return;
 
     if (state->is_requesting_update && state->wifi_status == WL_CONNECTED) {
-        String firmwareFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_FIRMWARE_FILE;
+        String firmwareFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_FIRMWARE_FILE;
         HTTPClient http;
         http.begin(firmwareFile);
         int httpCode = http.GET();
@@ -724,13 +728,13 @@ void handleUpdate(struct state *oldstate, struct state *state) {
             return;
         }
 
-        WiFiClient* client = http.getStreamPtr();
+        WiFiClient *client = http.getStreamPtr();
         size_t written = Update.writeStream(*client);
 
         if (written == contentLen) {
-            Serial.println("Written " + (String)written + " successfully");
+            Serial.println("Written " + (String) written + " successfully");
         } else {
-            Serial.println("Written only " + (String)written + "/" + (String)contentLen + ". Canceling.");
+            Serial.println("Written only " + (String) written + "/" + (String) contentLen + ". Canceling.");
             return;
         }
 
@@ -738,9 +742,9 @@ void handleUpdate(struct state *oldstate, struct state *state) {
             if (Update.isFinished()) {
                 Serial.println("Update was successful. Rebooting.");
                 ESP.restart();
-            } else 
+            } else
                 Serial.println("Error Occurred. Error #: " + String(Update.getError()));
-        } else 
+        } else
             Serial.println("Error Occurred. Error #: " + String(Update.getError()));
 
         http.end();
@@ -750,7 +754,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
 void fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
         HTTPClient http;
-        String versionFile = "http://" + (String)FIRMWARE_SERVER + (String)REMOTE_VERSION_FILE;
+        String versionFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_VERSION_FILE;
         http.begin(versionFile);
         int httpCode = http.GET();
 
@@ -759,7 +763,7 @@ void fetchRemoteVersion(struct state *state) {
             Serial.println(http.errorToString(httpCode));
             return;
         }
-        
+
         WiFiClient client = http.getStream();
 
         StaticJsonDocument<128> doc;
@@ -772,7 +776,7 @@ void fetchRemoteVersion(struct state *state) {
 
         state->newest_version = doc["version"].as<String>();
         http.end();
-    } 
+    }
 }
 
 void updateTouch(struct state *state) {
@@ -799,7 +803,8 @@ void updateTouch(struct state *state) {
     } else if (state->menu_mode == menuModeCalibrationAlert) {
         if (submitCalibrationButton.wasPressed()) {
             airSensor.setForcedRecalibrationFactor(state->calibration_value);
-            state->menu_mode = menuModeGraphs;
+            state->menu_mode = menuModeCalibrationSettings;
+            state->cal_info = infoCalSuccess;
         }
         if (toggleAutoCalButton.wasPressed())
             state->menu_mode = menuModeCalibrationSettings;
@@ -933,10 +938,8 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
 
     if (state->is_requesting_reset)
         state->wifi_info = infoConfigPortalCredentials;
-    else {
-        Serial.println("Draw wifisettings after a reset was done.");
+    else if (state->menu_mode == menuModeWiFiSettings)
         drawWiFiSettings(oldstate, state);
-    }
 
     Serial.println("WiFi Status: " + (String) state->wifi_status);
 }
@@ -945,7 +948,7 @@ void updateTimeState(struct state *oldstate, struct state *state) {
     if (state->current_time.tm_min == oldstate->current_time.tm_min)
         return;
 
-    if (mktime(&state->current_time) > mktime(&state->next_time_sync)) 
+    if (mktime(&state->current_time) > mktime(&state->next_time_sync))
         state->is_sync_needed = true;
 }
 
@@ -1003,12 +1006,14 @@ void drawScreen(struct state *oldstate, struct state *state) {
             clearScreen(oldstate, state);
             drawCalibrationAlert(oldstate, state);
         } else if (state->menu_mode == menuModeWiFiSettings) {
+            state->cal_info = infoEmpty;
             clearScreen(oldstate, state);
             drawWiFiSettings(oldstate, state);
         } else if (state->menu_mode == menuModeTimeSettings) {
             clearScreen(oldstate, state);
-            drawTimeSettings(oldstate, state);
+            drawSyncSettings(oldstate, state);
         } else if (state->menu_mode == menuModeUpdateSettings) {
+            state->time_info = infoEmpty;
             clearScreen(oldstate, state);
             drawUpdateSettings(oldstate, state);
         }
@@ -1135,6 +1140,7 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->calibration_value == oldstate->calibration_value &&
         state->auto_calibration_on == oldstate->auto_calibration_on &&
+        state->cal_info == oldstate->cal_info &&
         state->menu_mode == oldstate->menu_mode) {
         return;
     }
@@ -1153,6 +1159,11 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextColor(WHITE);
+
+    if (state->cal_info == infoCalSuccess) {
+        DisbuffBody.setTextColor(GREEN);
+        DisbuffBody.drawString("Calibration Successful", 35, 130);
+    }
 
     DisbuffBody.pushSprite(0, 26);
 
@@ -1262,7 +1273,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
         resetWiFiButton.draw();
 }
 
-void drawTimeSettings(struct state *oldstate, struct state *state) {
+void drawSyncSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->wifi_status == oldstate->wifi_status &&
         state->time_info == oldstate->time_info &&
@@ -1275,17 +1286,20 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
     DisbuffBody.setTextColor(WHITE);
     DisbuffBody.setTextSize(2);
-    DisbuffBody.drawString("Time", 75, 10);
+    DisbuffBody.drawString("Sync", 75, 10);
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
+    DisbuffBody.drawString("Sync time & firmware", 40, 80);
+    DisbuffBody.drawString("with online Servers.", 40, 95);
+
     if (state->time_info == infoTimeSyncSuccess) {
         DisbuffBody.setTextColor(GREEN);
-        DisbuffBody.drawString("Sync successful", 75, 95);
+        DisbuffBody.drawString("Sync successful", 75, 115);
     } else if (state->time_info == infoTimeSyncFailed) {
         DisbuffBody.setTextColor(RED);
-        DisbuffBody.drawString("Sync Failed", 80, 95);
+        DisbuffBody.drawString("Sync Failed", 80, 115);
     }
 
     if (state->wifi_status != WL_CONNECTED) {
@@ -1298,7 +1312,7 @@ void drawTimeSettings(struct state *oldstate, struct state *state) {
 
     // always push Disbuff before drawing buttons, otherwise button is not visible
     if (state->wifi_status == WL_CONNECTED) {
-        syncTimeButton.setLabel("Sync Time");
+        syncTimeButton.setLabel("Synchronize");
         syncTimeButton.draw();
     }
 }
@@ -1320,7 +1334,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
-    String info1 = "Version: " + (String)VERSION_NUMBER;
+    String info1 = "Version: " + (String) VERSION_NUMBER;
     String info2 = "Newest: " + (state->newest_version == "" ? "N/A" : state->newest_version);
     DisbuffBody.drawString(info1, 80, 80);
     DisbuffBody.drawString(info2, 85, 100);
@@ -1329,7 +1343,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
         DisbuffBody.setTextColor(RED);
         DisbuffBody.drawString("Update failed!", 40, 120);
     }
-    
+
     if (state->wifi_status != WL_CONNECTED) {
         DisbuffBody.setTextColor(RED);
         DisbuffBody.drawString("Can not update device", 35, 150);
@@ -1346,15 +1360,14 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
 }
 
 void hideButtons() {
-    for (int i = 0; i < Button::instances.size(); i++) {
-        if (Button::instances[i]->getName() == M5.BtnA.getName() ||
-            Button::instances[i]->getName() == M5.BtnB.getName() ||
-            Button::instances[i]->getName() == M5.BtnC.getName() ||
-            Button::instances[i]->getName() == M5.background.getName()
-                ) {
+    for (Button* button : Button::instances) {
+        if (button->getName() == M5.BtnA.getName() ||
+            button->getName() == M5.BtnB.getName() ||
+            button->getName() == M5.BtnC.getName() ||
+            button->getName() == M5.background.getName())
             continue;
-        }
-        Button::instances[i]->hide();
+
+        button->hide();
     }
 }
 
