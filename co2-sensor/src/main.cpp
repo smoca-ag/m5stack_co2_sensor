@@ -428,10 +428,9 @@ void checkIntervals(struct state *state) {
             if (!MQTTConnect(state))
                 return;
             publishMQTT(state);
+            checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
         } else
             Serial.println("MQTT not configured.");
-
-        checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
     }
 }
 
@@ -713,6 +712,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
         state->wifi_info = infoConfigPortalCredentials;
         drawScreen(oldstate, state);
 
+        ESPAsync_WiFiManager->setSaveConfigCallback(resetCallback);
         if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(),
                                                      (const char *) state->password.c_str())) {
             Serial.println("Not connected to WiFi but continuing anyway.");
@@ -863,13 +863,13 @@ void publishMQTT(struct state *state) {
     String temperature = (String)state->temperature_celsius;
 
     if (mqtt.publish((const char *) co2Topic.c_str(), (const char *) co2.c_str()))
-        Serial.println("Publish co2 to MQTT");
+        Serial.println("Published co2 to MQTT");
 
     if (mqtt.publish((const char *) humidityTopic.c_str(), (const char *) humidity.c_str()))
-        Serial.println("Publish humidity to MQTT");
+        Serial.println("Published humidity to MQTT");
 
     if (mqtt.publish((const char *) temperatureTopic.c_str(), (const char *) temperature.c_str()))
-        Serial.println("Publish temperature to MQTT");
+        Serial.println("Published temperature to MQTT");
 }
 
 void setMQTTServer(struct state *state) {
@@ -1169,8 +1169,10 @@ void updateTimeState(struct state *oldstate, struct state *state) {
 void updateMQTT(struct state *state) {
     if (mqtt.loop())
         state->is_mqtt_connected = true;
-    else
+    else {
+        mqtt.disconnect();
         state->is_mqtt_connected = false;
+    }
 }
 
 void createSprites() {
