@@ -63,11 +63,11 @@
 #define MQTT_USERNAME_Label "MQTT_USERNAME_Label"
 #define MQTT_KEY_Label "MQTT_KEY_Label"
 
-#define MQTT_SERVER_LEN 20
+#define MQTT_SERVER_LEN 40
 #define MQTT_PORT_LEN 5
 #define MQTT_DEVICENAME_LEN 40
-#define MQTT_USERNAME_LEN 40
-#define MQTT_KEY_LEN 40
+#define MQTT_USERNAME_LEN 20
+#define MQTT_KEY_LEN 30
 
 String randomPassword();
 
@@ -122,6 +122,8 @@ bool areRouterCredentialsValid();
 void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
 void publishMQTT(struct state *state);
+
+void setMQTTServer(struct state *state);
 
 bool MQTTConnect(struct state *state);
 

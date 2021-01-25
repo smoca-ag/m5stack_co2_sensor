@@ -161,7 +161,7 @@ DNSServer dnsServer;
 String Router_SSID;
 String Router_Pass;
 
-WiFiClient client = NULL;
+WiFiClient client;
 PubSubClient mqtt(client);
 
 // statistics
@@ -416,8 +416,15 @@ void checkIntervals(struct state *state) {
     }
 
     if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
-        if (state->wifi_status == WL_CONNECTED && state->mqttServer != "" && state->mqttPort != "")
+        if (state->wifi_status == WL_CONNECTED &&
+            strcmp(state->mqttServer, "") != 0 && 
+            strcmp(state->mqttPort, "") != 0) {
+
+            setMQTTServer(state);
+            if (!MQTTConnect(state))
+                return;
             publishMQTT(state);
+        }
 
         checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
     }
@@ -653,9 +660,12 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
     unsigned long startedAt = millis();
 
     ESPAsync_WMParameter MQTT_SERVER_FIELD(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN + 1);
-    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN + 1);
-    ESPAsync_WMParameter MQTT_DEVICENAME_FIELD(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN + 1);
-    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN + 1);
+    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort,
+                                               MQTT_PORT_LEN + 1);
+    ESPAsync_WMParameter MQTT_DEVICENAME_FIELD(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice,
+                                               MQTT_DEVICENAME_LEN + 1);
+    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser,
+                                             MQTT_USERNAME_LEN + 1);
     ESPAsync_WMParameter MQTT_KEY_FIELD(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN + 1);
 
     ESPAsync_WiFiManager->addParameter(&MQTT_SERVER_FIELD);
@@ -733,9 +743,12 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     state->wifi_status = WL_DISCONNECTED;
 
     ESPAsync_WMParameter MQTT_SERVER_FIELD(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN + 1);
-    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN + 1);
-    ESPAsync_WMParameter MQTT_DEVICENAME_FIELD(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN + 1);
-    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN + 1);
+    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort,
+                                               MQTT_PORT_LEN + 1);
+    ESPAsync_WMParameter MQTT_DEVICENAME_FIELD(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice,
+                                               MQTT_DEVICENAME_LEN + 1);
+    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser,
+                                             MQTT_USERNAME_LEN + 1);
     ESPAsync_WMParameter MQTT_KEY_FIELD(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN + 1);
 
     ESPAsync_WiFiManager->addParameter(&MQTT_SERVER_FIELD);
@@ -832,45 +845,42 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
 }
 
 void publishMQTT(struct state *state) {
-    Serial.print("Saved MQTT Server: ");
-    Serial.println(state->mqttServer);
+    String co2 = (String) state->co2_ppm;
+    String humidity = (String) state->humidity_percent;
+    String temperature = (String) state->temperature_celsius;
 
-    Serial.print("Saved MQTT Port: ");
-    Serial.println(state->mqttPort);
-
-    Serial.print("MQTT Device: ");
-    Serial.println(state->mqttDevice == "" ? state->mqttDevice : ssid);
-
-    if (!MQTTConnect(state))
+    if (!mqtt.publish(TOPIC_CO2, co2.c_str()) ||
+        !mqtt.publish(TOPIC_HUMIDITY, humidity.c_str()) ||
+        !mqtt.publish(TOPIC_TEMPERATURE, temperature.c_str())) {
+        Serial.println("Publish to MQTT failed");
         return;
+    }
+    Serial.println("Publish to MQTT Server succeeded");
+}
 
-    String co2 = (String)state->co2_ppm;
-    String humidity = (String)state->humidity_percent;
-    String temperature = (String)state->temperature_celsius;
+void setMQTTServer(struct state *state) {
+    IPAddress serverIP;
 
-    mqtt.publish(TOPIC_CO2, co2.c_str());
-    mqtt.publish(TOPIC_HUMIDITY, humidity.c_str());
-    mqtt.publish(TOPIC_TEMPERATURE, temperature.c_str());
-    Serial.println("Published to MQTT Server");
+    if (serverIP.fromString((String) state->mqttServer)) {
+        int ip[4];
+        sscanf(state->mqttServer, "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
+        serverIP = IPAddress(ip[0], ip[1], ip[2], ip[3]);
+        Serial.print("Setting ip Server: ");
+        Serial.println((String) state->mqttServer + ", " + (String) state->mqttPort);
+        mqtt.setServer(serverIP, atoi(state->mqttPort));
+    } else {
+        Serial.print("Setting char Server: ");
+        Serial.println((String) state->mqttServer + ", " + (String) state->mqttPort);
+        mqtt.setServer((const char *) state->mqttServer, atoi(state->mqttPort));
+    }
 }
 
 bool MQTTConnect(struct state *state) {
     if (mqtt.connected())
         return true;
 
-    mqtt.setClient(client);
-    IPAddress serverIP;
-
-    if (serverIP.fromString((String)state->mqttServer)) {
-        int ip[4];
-        sscanf(state->mqttServer, "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
-        serverIP = IPAddress(ip[0], ip[1], ip[2], ip[3]);
-        mqtt.setServer(serverIP, (int)state->mqttPort);
-    } else 
-        mqtt.setServer(state->mqttServer, (int)state->mqttPort);
-
     for (int i = 0; i < 3; i++) {
-        if (mqtt.connect(state->mqttDevice == "" ? state->mqttDevice : ssid.c_str())) {
+        if (mqtt.connect(strcmp(state->mqttDevice, "") == 0 ? ssid.c_str() : state->mqttDevice)) {
             Serial.println(F("MQTT connection successful!"));
             return true;
         }
@@ -1194,7 +1204,7 @@ void drawScreen(struct state *oldstate, struct state *state) {
             state->cal_info = infoEmpty;
             clearScreen(oldstate, state);
             drawWiFiSettings(oldstate, state);
-        } else if(state->menu_mode == menuModeMQTTSettings) {
+        } else if (state->menu_mode == menuModeMQTTSettings) {
             clearScreen(oldstate, state);
             drawMQTTSettings(oldstate, state);
         } else if (state->menu_mode == menuModeTimeSettings) {
@@ -1482,7 +1492,7 @@ void drawMQTTSettings(struct state *oldstate, struct state *state) {
 
     if (state->is_mqtt_connected) {
         DisbuffBody.setTextColor(GREEN);
-        DisbuffBody.drawString("Connected", 95, 80);
+        DisbuffBody.drawString("Connected", 100, 80);
         DisbuffBody.setTextColor(WHITE);
     } else {
         DisbuffBody.setTextColor(RED);
@@ -1490,9 +1500,9 @@ void drawMQTTSettings(struct state *oldstate, struct state *state) {
         DisbuffBody.setTextColor(WHITE);
     }
 
-    String server = ((String)state->mqttServer == "" ? "N/A" : (String)state->mqttServer);
-    String port = (String)state->mqttPort == "" ? "N/A" : (String)state->mqttPort;
-    String user = (String)state->mqttUser == "" ? "N/A" : ssid;
+    String server = ((String) state->mqttServer == "" ? "Not Configured" : (String) state->mqttServer);
+    String port = (String) state->mqttPort == "" ? "Not Configured" : (String) state->mqttPort;
+    String user = (String) state->mqttUser == "" ? ssid : (String) state->mqttDevice;
 
     String info0 = "Server: " + (server.length() > 18 ? (server.substring(0, 14) + "...") : server);
     String info1 = "Port: " + port;
@@ -1592,7 +1602,7 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
 }
 
 void hideButtons() {
-    for (Button* button : Button::instances) {
+    for (Button *button : Button::instances) {
         if (button->getName() == M5.BtnA.getName() ||
             button->getName() == M5.BtnB.getName() ||
             button->getName() == M5.BtnC.getName() ||
