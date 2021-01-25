@@ -53,19 +53,21 @@
 #define MQTT_FILENAME "/mqtt.json"
 #define CONFIG_FILENAME "/wifi_config"
 
-#define TOPIC_CO2 "co2"
-#define TOPIC_HUMIDITY "humidity"
-#define TOPIC_TEMPERATURE "temperature"
+#define TOPIC_CO2 "/co2"
+#define TOPIC_HUMIDITY "/humidity"
+#define TOPIC_TEMPERATURE "/temperature"
 
 #define MQTT_SERVER_Label "MQTT_SERVER_Label"
 #define MQTT_SERVERPORT_Label "MQTT_SERVERPORT_Label"
 #define MQTT_DEVICENAME_Label "MQTT_DEVICENAME_Label"
+#define MQTT_TOPIC_Label "MQTT_TOPIC_Label"
 #define MQTT_USERNAME_Label "MQTT_USERNAME_Label"
 #define MQTT_KEY_Label "MQTT_KEY_Label"
 
 #define MQTT_SERVER_LEN 40
 #define MQTT_PORT_LEN 5
 #define MQTT_DEVICENAME_LEN 40
+#define MQTT_TOPIC_LEN 40
 #define MQTT_USERNAME_LEN 20
 #define MQTT_KEY_LEN 30
 

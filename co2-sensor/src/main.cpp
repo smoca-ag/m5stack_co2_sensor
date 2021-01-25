@@ -95,6 +95,7 @@ struct state {
     char mqttServer[MQTT_SERVER_LEN];
     char mqttPort[MQTT_PORT_LEN];
     char mqttDevice[MQTT_DEVICENAME_LEN];
+    char mqttTopic[MQTT_TOPIC_LEN];
     char mqttUser[MQTT_USERNAME_LEN];
     char mqttPassword[MQTT_KEY_LEN];
 } state;
@@ -418,7 +419,8 @@ void checkIntervals(struct state *state) {
     if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
         if (state->wifi_status == WL_CONNECTED &&
             strcmp(state->mqttServer, "") != 0 && 
-            strcmp(state->mqttPort, "") != 0) {
+            strcmp(state->mqttPort, "") != 0 &&
+            strcmp(state->mqttTopic, "") != 0) {
 
             setMQTTServer(state);
             if (!MQTTConnect(state))
@@ -659,20 +661,19 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
                       struct state *state) {
     unsigned long startedAt = millis();
 
-    ESPAsync_WMParameter MQTT_SERVER_FIELD(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN + 1);
-    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort,
-                                               MQTT_PORT_LEN + 1);
-    ESPAsync_WMParameter MQTT_DEVICENAME_FIELD(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice,
-                                               MQTT_DEVICENAME_LEN + 1);
-    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser,
-                                             MQTT_USERNAME_LEN + 1);
-    ESPAsync_WMParameter MQTT_KEY_FIELD(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN + 1);
+    ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN + 1);
+    ESPAsync_WMParameter mqttPort(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN + 1);
+    ESPAsync_WMParameter mqttTopic(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN + 1);
+    ESPAsync_WMParameter mqttDevice(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN + 1);
+    ESPAsync_WMParameter mqttUser(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN + 1);
+    ESPAsync_WMParameter mqttPassword(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN + 1);
 
-    ESPAsync_WiFiManager->addParameter(&MQTT_SERVER_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_SERVERPORT_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_DEVICENAME_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_USERNAME_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_KEY_FIELD);
+    ESPAsync_WiFiManager->addParameter(&mqttServer);
+    ESPAsync_WiFiManager->addParameter(&mqttPort);
+    ESPAsync_WiFiManager->addParameter(&mqttDevice);
+    ESPAsync_WiFiManager->addParameter(&mqttTopic);
+    ESPAsync_WiFiManager->addParameter(&mqttUser);
+    ESPAsync_WiFiManager->addParameter(&mqttPassword);
 
     setupWiFiManager(ESPAsync_WiFiManager);
 
@@ -716,11 +717,12 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
 
         saveConfigPortalCredentials(ESPAsync_WiFiManager);
 
-        strcpy(state->mqttServer, MQTT_SERVER_FIELD.getValue());
-        strcpy(state->mqttPort, MQTT_SERVERPORT_FIELD.getValue());
-        strcpy(state->mqttDevice, MQTT_DEVICENAME_FIELD.getValue());
-        strcpy(state->mqttUser, MQTT_USERNAME_FIELD.getValue());
-        strcpy(state->mqttPassword, MQTT_KEY_FIELD.getValue());
+        strcpy(state->mqttServer, mqttServer.getValue());
+        strcpy(state->mqttPort, mqttPort.getValue());
+        strcpy(state->mqttDevice, mqttDevice.getValue());
+        strcpy(state->mqttTopic, mqttTopic.getValue());
+        strcpy(state->mqttUser, mqttUser.getValue());
+        strcpy(state->mqttPassword, mqttPassword.getValue());
 
         saveMQTTConfig(state);
     }
@@ -742,20 +744,19 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     ESPAsync_WiFiManager->resetSettings();
     state->wifi_status = WL_DISCONNECTED;
 
-    ESPAsync_WMParameter MQTT_SERVER_FIELD(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN + 1);
-    ESPAsync_WMParameter MQTT_SERVERPORT_FIELD(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort,
-                                               MQTT_PORT_LEN + 1);
-    ESPAsync_WMParameter MQTT_DEVICENAME_FIELD(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice,
-                                               MQTT_DEVICENAME_LEN + 1);
-    ESPAsync_WMParameter MQTT_USERNAME_FIELD(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser,
-                                             MQTT_USERNAME_LEN + 1);
-    ESPAsync_WMParameter MQTT_KEY_FIELD(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN + 1);
+    ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN + 1);
+    ESPAsync_WMParameter mqttPort(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN + 1);
+    ESPAsync_WMParameter mqttTopic(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN + 1);
+    ESPAsync_WMParameter mqttDevice(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN + 1);
+    ESPAsync_WMParameter mqttUser(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN + 1);
+    ESPAsync_WMParameter mqttPassword(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN + 1);
 
-    ESPAsync_WiFiManager->addParameter(&MQTT_SERVER_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_SERVERPORT_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_DEVICENAME_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_USERNAME_FIELD);
-    ESPAsync_WiFiManager->addParameter(&MQTT_KEY_FIELD);
+    ESPAsync_WiFiManager->addParameter(&mqttServer);
+    ESPAsync_WiFiManager->addParameter(&mqttPort);
+    ESPAsync_WiFiManager->addParameter(&mqttDevice);
+    ESPAsync_WiFiManager->addParameter(&mqttTopic);
+    ESPAsync_WiFiManager->addParameter(&mqttUser);
+    ESPAsync_WiFiManager->addParameter(&mqttPassword);
 
     setupWiFiManager(ESPAsync_WiFiManager);
     Serial.println("Start Configuration Portal for reset.");
@@ -763,11 +764,12 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str());
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
 
-    strcpy(state->mqttServer, MQTT_SERVER_FIELD.getValue());
-    strcpy(state->mqttPort, MQTT_SERVERPORT_FIELD.getValue());
-    strcpy(state->mqttDevice, MQTT_DEVICENAME_FIELD.getValue());
-    strcpy(state->mqttUser, MQTT_USERNAME_FIELD.getValue());
-    strcpy(state->mqttPassword, MQTT_KEY_FIELD.getValue());
+    strcpy(state->mqttServer, mqttServer.getValue());
+    strcpy(state->mqttPort, mqttPort.getValue());
+    strcpy(state->mqttDevice, mqttDevice.getValue());
+    strcpy(state->mqttTopic, mqttTopic.getValue());
+    strcpy(state->mqttUser, mqttUser.getValue());
+    strcpy(state->mqttPassword, mqttPassword.getValue());
 
     saveMQTTConfig(state);
 }
@@ -845,13 +847,13 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
 }
 
 void publishMQTT(struct state *state) {
-    String co2 = (String) state->co2_ppm;
-    String humidity = (String) state->humidity_percent;
-    String temperature = (String) state->temperature_celsius;
+    String co2Topic = (String) state->mqttTopic + (String) TOPIC_CO2;
+    String humidityTopic = (String) state->mqttTopic + (String) TOPIC_HUMIDITY;
+    String temperatureTopic = (String) state->mqttTopic + (String) TOPIC_TEMPERATURE;
 
-    if (!mqtt.publish(TOPIC_CO2, co2.c_str()) ||
-        !mqtt.publish(TOPIC_HUMIDITY, humidity.c_str()) ||
-        !mqtt.publish(TOPIC_TEMPERATURE, temperature.c_str())) {
+    if (!mqtt.publish(co2Topic.c_str(), (const char *) state->co2_ppm) ||
+        !mqtt.publish(humidityTopic.c_str(), (const char *) state->humidity_percent) ||
+        !mqtt.publish(temperatureTopic.c_str(), (const char *) state->temperature_celsius)) {
         Serial.println("Publish to MQTT failed");
         return;
     }
@@ -860,7 +862,6 @@ void publishMQTT(struct state *state) {
 
 void setMQTTServer(struct state *state) {
     IPAddress serverIP;
-
     if (serverIP.fromString((String) state->mqttServer)) {
         int ip[4];
         sscanf(state->mqttServer, "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
@@ -879,11 +880,22 @@ bool MQTTConnect(struct state *state) {
     if (mqtt.connected())
         return true;
 
+    char clientID[MQTT_DEVICENAME_LEN];
+    strcpy(clientID, strcmp(state->mqttDevice, "") == 0 ? ssid.c_str() : state->mqttDevice);
+
     for (int i = 0; i < 3; i++) {
-        if (mqtt.connect(strcmp(state->mqttDevice, "") == 0 ? ssid.c_str() : state->mqttDevice)) {
-            Serial.println(F("MQTT connection successful!"));
-            return true;
+        if (strcmp(state->mqttUser, "") != 0 && strcmp(state->mqttPassword, "") != 0) {
+            if (mqtt.connect(clientID, state->mqttUser, state->mqttPassword)) {
+                Serial.println(F("MQTT connection successful!"));
+                return true;
+            }
+        } else {
+            if (mqtt.connect(clientID)) {
+                Serial.println(F("MQTT connection successful!"));
+                return true;
+            }
         }
+
 
         Serial.print("MQTT connection failed: ");
         Serial.println(mqtt.state());
