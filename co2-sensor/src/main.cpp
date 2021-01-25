@@ -420,9 +420,9 @@ void checkIntervals(struct state *state) {
 
     if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
         if (state->wifi_status == WL_CONNECTED &&
-            strcmp(state->mqttServer, "") != 0 && 
-            strcmp(state->mqttPort, "") != 0 &&
-            strcmp(state->mqttTopic, "") != 0) {
+            (String)state->mqttServer != "" && 
+            (String)state->mqttPort != "" &&
+            (String)state->mqttTopic != "") {
 
             setMQTTServer(state);
             if (!MQTTConnect(state))
@@ -894,10 +894,10 @@ bool MQTTConnect(struct state *state) {
         return true;
 
     char clientID[MQTT_DEVICENAME_LEN];
-    strcpy(clientID, strcmp(state->mqttDevice, "") == 0 ? ssid.c_str() : state->mqttDevice);
+    strncpy(clientID, (String)state->mqttDevice == "" ? ssid.c_str() : state->mqttDevice, MQTT_DEVICENAME_LEN);
 
     for (int i = 0; i < 3; i++) {
-        if (strcmp(state->mqttUser, "") != 0 && strcmp(state->mqttPassword, "") != 0) {
+        if ((String)state->mqttUser != "" && (String)state->mqttPassword != "") {
             if (mqtt.connect(clientID, state->mqttUser, state->mqttPassword)) {
                 Serial.println(F("MQTT connection successful!"));
                 return true;
