@@ -93,8 +93,6 @@ void checkWiFi();
 
 uint8_t connectMultiWiFi();
 
-void disconnectWiFi(bool wifiOff, bool eraseAP);
-
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);

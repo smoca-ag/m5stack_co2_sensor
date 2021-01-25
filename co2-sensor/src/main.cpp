@@ -350,7 +350,7 @@ void initWiFi() {
     if (!isValid) {
         Serial.println("Disconnect WiFi in setup()");
         state.is_wifi_activated = false;
-        disconnectWiFi(true, false);
+        WiFi.disconnect(true, false);
     }
 }
 
@@ -492,11 +492,6 @@ uint8_t connectMultiWiFi() {
     }
 
     return status;
-}
-
-void disconnectWiFi(bool wifiOff, bool eraseAP) {
-    WiFi.disconnect(wifiOff, eraseAP);
-    Serial.println("WiFi is disabled.");
 }
 
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
@@ -648,8 +643,9 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
         state->is_wifi_activated = false;
 
-    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
-        disconnectWiFi(true, false);
+    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED) {
+        WiFi.disconnect(true, false);
+    }
 
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED) {
         ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
@@ -749,6 +745,7 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     Router_SSID = "";
     Router_Pass = "";
     ESPAsync_WiFiManager->resetSettings();
+    WiFi.disconnect(true, true);
     state->wifi_status = WL_DISCONNECTED;
 
     ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
@@ -1143,8 +1140,6 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
         state->wifi_info = infoWiFiConnected;
     else if (state->wifi_status == WL_CONNECT_FAILED)
         state->wifi_info = infoWiFiFailed;
-    else if (state->wifi_status == WL_DISCONNECTED)
-        state->wifi_info = infoEmpty;
     else if (state->wifi_status == WL_CONNECTION_LOST)
         state->wifi_info = infoWiFiLost;
     else
