@@ -183,6 +183,8 @@ void setup() {
     M5.Axp.EnableCoulombcounter();
     M5.Axp.SetLed(M5.Axp.isACIN() ? 1 : 0);
 
+    mqtt.setBufferSize(512);
+
     // Initialize SPIFFS
     if (!SPIFFS.begin(true)) {
         Serial.println("An Error has occurred while mounting SPIFFS");
@@ -426,7 +428,8 @@ void checkIntervals(struct state *state) {
             if (!MQTTConnect(state))
                 return;
             publishMQTT(state);
-        }
+        } else
+            Serial.println("MQTT not configured.");
 
         checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
     }
@@ -545,6 +548,9 @@ void loadMQTTConfig() {
     if (json.containsKey(MQTT_SERVERPORT_Label))
         strcpy(state.mqttPort, json[MQTT_SERVERPORT_Label]);
 
+    if (json.containsKey(MQTT_TOPIC_Label))
+        strcpy(state.mqttTopic, json[MQTT_TOPIC_Label]);
+
     if (json.containsKey(MQTT_DEVICENAME_Label))
         strcpy(state.mqttDevice, json[MQTT_DEVICENAME_Label]);
 
@@ -560,6 +566,7 @@ void saveMQTTConfig(struct state *state) {
 
     json[MQTT_SERVER_Label] = state->mqttServer;
     json[MQTT_SERVERPORT_Label] = state->mqttPort;
+    json[MQTT_TOPIC_Label] = state->mqttTopic;
     json[MQTT_DEVICENAME_Label] = state->mqttDevice;
     json[MQTT_USERNAME_Label] = state->mqttUser;
     json[MQTT_KEY_Label] = state->mqttPassword;
@@ -670,8 +677,8 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
 
     ESPAsync_WiFiManager->addParameter(&mqttServer);
     ESPAsync_WiFiManager->addParameter(&mqttPort);
-    ESPAsync_WiFiManager->addParameter(&mqttDevice);
     ESPAsync_WiFiManager->addParameter(&mqttTopic);
+    ESPAsync_WiFiManager->addParameter(&mqttDevice);
     ESPAsync_WiFiManager->addParameter(&mqttUser);
     ESPAsync_WiFiManager->addParameter(&mqttPassword);
 
@@ -753,8 +760,8 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
 
     ESPAsync_WiFiManager->addParameter(&mqttServer);
     ESPAsync_WiFiManager->addParameter(&mqttPort);
-    ESPAsync_WiFiManager->addParameter(&mqttDevice);
     ESPAsync_WiFiManager->addParameter(&mqttTopic);
+    ESPAsync_WiFiManager->addParameter(&mqttDevice);
     ESPAsync_WiFiManager->addParameter(&mqttUser);
     ESPAsync_WiFiManager->addParameter(&mqttPassword);
 
@@ -847,17 +854,22 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
 }
 
 void publishMQTT(struct state *state) {
-    String co2Topic = (String) state->mqttTopic + (String) TOPIC_CO2;
-    String humidityTopic = (String) state->mqttTopic + (String) TOPIC_HUMIDITY;
-    String temperatureTopic = (String) state->mqttTopic + (String) TOPIC_TEMPERATURE;
+    char co2 [8];
+    char humidity[8];
+    char temperature[8];
 
-    if (!mqtt.publish(co2Topic.c_str(), (const char *) state->co2_ppm) ||
-        !mqtt.publish(humidityTopic.c_str(), (const char *) state->humidity_percent) ||
-        !mqtt.publish(temperatureTopic.c_str(), (const char *) state->temperature_celsius)) {
-        Serial.println("Publish to MQTT failed");
-        return;
-    }
-    Serial.println("Publish to MQTT Server succeeded");
+    itoa(state->co2_ppm, co2, 10);
+    itoa(state->humidity_percent, humidity, 10);
+    itoa(state->temperature_celsius, temperature, 10);
+
+    if (mqtt.publish(strcat(state->mqttTopic, TOPIC_CO2), (const char *) co2))
+        Serial.println("Publish co2 to MQTT");
+
+    if (mqtt.publish(strcat(state->mqttTopic, TOPIC_HUMIDITY), (const char *) humidity))
+        Serial.println("Publish humidity to MQTT");
+
+    if (mqtt.publish(strcat(state->mqttTopic, TOPIC_TEMPERATURE), (const char *) temperature))
+        Serial.println("Publish temperature to MQTT");
 }
 
 void setMQTTServer(struct state *state) {
@@ -1514,11 +1526,11 @@ void drawMQTTSettings(struct state *oldstate, struct state *state) {
 
     String server = ((String) state->mqttServer == "" ? "Not Configured" : (String) state->mqttServer);
     String port = (String) state->mqttPort == "" ? "Not Configured" : (String) state->mqttPort;
-    String user = (String) state->mqttUser == "" ? ssid : (String) state->mqttDevice;
+    String user = (String) state->mqttDevice == "" ? ssid : (String) state->mqttDevice;
 
     String info0 = "Server: " + (server.length() > 18 ? (server.substring(0, 14) + "...") : server);
     String info1 = "Port: " + port;
-    String info2 = "User: " + (user.length() > 18 ? (user.substring(0, 14) + "...") : user);
+    String info2 = "Device: " + (user.length() > 18 ? (user.substring(0, 14) + "...") : user);
 
     DisbuffBody.drawString(info0, 15, 100);
     DisbuffBody.drawString(info1, 15, 115);

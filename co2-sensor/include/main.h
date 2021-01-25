@@ -64,12 +64,12 @@
 #define MQTT_USERNAME_Label "MQTT_USERNAME_Label"
 #define MQTT_KEY_Label "MQTT_KEY_Label"
 
-#define MQTT_SERVER_LEN 40
-#define MQTT_PORT_LEN 5
-#define MQTT_DEVICENAME_LEN 40
-#define MQTT_TOPIC_LEN 40
-#define MQTT_USERNAME_LEN 20
-#define MQTT_KEY_LEN 30
+#define MQTT_SERVER_LEN 64
+#define MQTT_PORT_LEN 8
+#define MQTT_DEVICENAME_LEN 24
+#define MQTT_TOPIC_LEN 64
+#define MQTT_USERNAME_LEN 24
+#define MQTT_KEY_LEN 32
 
 String randomPassword();
 
