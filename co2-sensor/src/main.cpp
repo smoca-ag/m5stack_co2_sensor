@@ -153,11 +153,11 @@ void loop() {
 
     syncData(&state);
     saveStateFile(&oldstate, &state);
-
     drawScreen(&oldstate, &state);
+
     handleWiFi(&oldstate, &state);
     checkIntervals(&state);
-    handleUpdate(&oldstate, &state);
+    handleFirmware(&oldstate, &state);
 
     writeSsd(&state);
     cycle++;
@@ -258,9 +258,9 @@ void initWiFi() {
     Router_SSID = ESPAsync_WiFiManager.WiFi_SSID();
     Router_Pass = ESPAsync_WiFiManager.WiFi_Pass();
 
-    bool isValid = areRouterCredentialsValid();
-    Serial.println("Router_SSID: " + Router_SSID);
-    if (!isValid) {
+    Serial.print("Router_SSID: " + Router_SSID);
+    Serial.println("; Router_Pass: " + Router_Pass);
+    if (!areRouterCredentialsValid()) {
         Serial.println("Disconnect WiFi in setup()");
         state.is_wifi_activated = false;
         WiFi.disconnect(true, false);
@@ -323,7 +323,6 @@ void checkIntervals(struct state *state) {
     static ulong checkwifi_timeout = 0;
     static ulong checkmqtt_timeout = 0;
     static ulong current_millis;
-
     current_millis = millis();
 
     if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
@@ -571,9 +570,7 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     }
 }
 
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
-                      struct state *oldstate,
-                      struct state *state) {
+void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state) {
     unsigned long startedAt = millis();
 
     ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
@@ -828,7 +825,7 @@ bool MQTTConnect(struct state *state) {
     return false;
 }
 
-void handleUpdate(struct state *oldstate, struct state *state) {
+void handleFirmware(struct state *oldstate, struct state *state) {
     if (state->is_requesting_update == oldstate->is_requesting_update)
         return;
 
@@ -904,52 +901,68 @@ bool fetchRemoteVersion(struct state *state) {
 }
 
 void updateTouch(struct state *state) {
-    if (state->menu_mode == menuModeGraphs) {
-        if (batteryButton.wasPressed())
-            state->graph_mode = graphModeBatteryMah;
-        if (co2Button.wasPressed())
-            state->graph_mode = graphModeCo2;
-        if (midLeftButton.wasPressed())
-            state->graph_mode = graphModeTemperature;
-        if (midRightButton.wasPressed())
-            state->graph_mode = graphModeHumidity;
-    } else if (state->menu_mode == menuModeCalibrationSettings) {
-        if (midLeftButton.wasPressed())
-            state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
-        if (midRightButton.wasPressed())
-            state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
-        if (toggleAutoCalButton.wasPressed()) {
-            state->auto_calibration_on = !state->auto_calibration_on;
-            airSensor.setAutoSelfCalibration(state->auto_calibration_on);
-        }
-        if (submitCalibrationButton.wasPressed())
-            state->menu_mode = menuModeCalibrationAlert;
-    } else if (state->menu_mode == menuModeCalibrationAlert) {
-        if (submitCalibrationButton.wasPressed()) {
-            airSensor.setForcedRecalibrationFactor(state->calibration_value);
-            state->menu_mode = menuModeCalibrationSettings;
-            state->cal_info = infoCalSuccess;
-        }
-        if (toggleAutoCalButton.wasPressed())
-            state->menu_mode = menuModeCalibrationSettings;
-    } else if (state->menu_mode == menuModeWiFiSettings) {
-        if (toggleWiFiButton.wasPressed())
-            state->is_wifi_activated = !state->is_wifi_activated;
-        if (resetWiFiButton.wasPressed()) {
-            state->is_requesting_reset = true;
-        }
-    } else if (state->menu_mode == menuModeTimeSettings) {
-        if (syncTimeButton.wasPressed())
-            state->force_sync = true;
-    } else if (state->menu_mode == menuModeUpdateSettings) {
-        if (syncTimeButton.wasPressed())
-            state->is_requesting_update = true;
-    }
+    switch(state->menu_mode) {
+        case menuModeGraphs: 
+            if (batteryButton.wasPressed())
+                state->graph_mode = graphModeBatteryMah;
+            if (co2Button.wasPressed())
+                state->graph_mode = graphModeCo2;
+            if (midLeftButton.wasPressed())
+                state->graph_mode = graphModeTemperature;
+            if (midRightButton.wasPressed())
+                state->graph_mode = graphModeHumidity;
+            break;
 
+        case menuModeCalibrationSettings:
+            if (midLeftButton.wasPressed())
+                state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
+            if (midRightButton.wasPressed())
+                state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
+            if (toggleAutoCalButton.wasPressed()) {
+                state->auto_calibration_on = !state->auto_calibration_on;
+                airSensor.setAutoSelfCalibration(state->auto_calibration_on);
+            }
+            if (submitCalibrationButton.wasPressed())
+                state->menu_mode = menuModeCalibrationAlert;
+            break;
+
+        case menuModeCalibrationAlert: 
+            if (submitCalibrationButton.wasPressed()) {
+                airSensor.setForcedRecalibrationFactor(state->calibration_value);
+                state->menu_mode = menuModeCalibrationSettings;
+                state->cal_info = infoCalSuccess;
+            }
+            if (toggleAutoCalButton.wasPressed())
+                state->menu_mode = menuModeCalibrationSettings;
+            break;
+
+        case menuModeWiFiSettings:
+            if (toggleWiFiButton.wasPressed())
+                state->is_wifi_activated = !state->is_wifi_activated;
+            if (resetWiFiButton.wasPressed()) {
+                state->is_requesting_reset = true;
+            }
+            break;
+
+        case menuModeTimeSettings:
+            if (syncTimeButton.wasPressed())
+                state->force_sync = true;
+            break;
+
+        case menuModeUpdateSettings:
+            if (syncTimeButton.wasPressed())
+                state->is_requesting_update = true;
+            break;
+        
+        default: 
+            break;
+    }
+ 
     if (M5.BtnA.wasPressed()) {
         setDisplayPower(state->display_sleep);
         state->display_sleep = !state->display_sleep;
     }
+
     if (M5.BtnC.wasPressed()) {
         handleNavigation(state);
     }
@@ -1175,14 +1188,12 @@ void drawHeader(struct state *oldstate, struct state *state) {
 }
 
 void drawValues(struct state *oldstate, struct state *state) {
-    if (
-            state->temperature_celsius == oldstate->temperature_celsius &&
-            state->humidity_percent == oldstate->humidity_percent &&
-            state->co2_ppm == oldstate->co2_ppm &&
-            state->display_sleep == oldstate->display_sleep &&
-            state->menu_mode == oldstate->menu_mode) {
+    if (state->temperature_celsius == oldstate->temperature_celsius &&
+        state->humidity_percent == oldstate->humidity_percent &&
+        state->co2_ppm == oldstate->co2_ppm &&
+        state->display_sleep == oldstate->display_sleep &&
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffValue.fillRect(0, 0, 320, 116, BLACK);
     DisbuffValue.setFreeFont(&FreeMonoBold18pt7b);
@@ -1208,9 +1219,8 @@ void drawGraph(struct state *oldstate, struct state *state) {
     if (state->graph_mode == oldstate->graph_mode &&
         state->graph_index == oldstate->graph_index &&
         state->display_sleep == oldstate->display_sleep &&
-        state->menu_mode == oldstate->menu_mode) {
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffGraph.fillRect(0, 0, 320, 97, BLACK);
 
@@ -1275,9 +1285,8 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
         state->calibration_value == oldstate->calibration_value &&
         state->auto_calibration_on == oldstate->auto_calibration_on &&
         state->cal_info == oldstate->cal_info &&
-        state->menu_mode == oldstate->menu_mode) {
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 
@@ -1358,9 +1367,8 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
         state->is_requesting_reset == oldstate->is_requesting_reset &&
         state->wifi_status == oldstate->wifi_status &&
         state->wifi_info == oldstate->wifi_info &&
-        state->menu_mode == oldstate->menu_mode) {
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 

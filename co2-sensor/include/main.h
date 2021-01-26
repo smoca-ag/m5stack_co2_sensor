@@ -217,7 +217,7 @@ void setMQTTServer(struct state *state);
 
 bool MQTTConnect(struct state *state);
 
-void handleUpdate(struct state *oldstate, struct state *state);
+void handleFirmware(struct state *oldstate, struct state *state);
 
 bool fetchRemoteVersion(struct state *state);
 
