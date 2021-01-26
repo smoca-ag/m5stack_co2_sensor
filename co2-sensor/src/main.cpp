@@ -75,6 +75,15 @@ DNSServer dnsServer;
 String Router_SSID;
 String Router_Pass;
 
+ESPAsync_WiFiManager *asyncWifiManager;
+
+ESPAsync_WMParameter *mqttServer;
+ESPAsync_WMParameter *mqttPort;
+ESPAsync_WMParameter *mqttTopic;
+ESPAsync_WMParameter *mqttDevice;
+ESPAsync_WMParameter *mqttUser;
+ESPAsync_WMParameter *mqttPassword;
+
 WiFiClient client;
 PubSubClient mqtt(client);
 
@@ -96,6 +105,7 @@ void setup() {
     M5.Axp.EnableCoulombcounter();
     M5.Axp.SetLed(M5.Axp.isACIN() ? 1 : 0);
 
+    ssid.toUpperCase();
     mqtt.setBufferSize(512);
 
     // Initialize SPIFFS
@@ -125,11 +135,13 @@ void setup() {
         graph.batteryMah[i] = my_nan;
     }
 
-    initWiFi();
     initSD();
     initAirSensor();
+    initAsyncWifiManager(&state);
+    initWiFi();
     initAPIPConfigStruct(WM_AP_IPconfig);
     initSTAIPConfigStruct(WM_STA_IPconfig);
+
     cycle = 0;
     Serial.println(state.is_wifi_activated ? "WiFi on" : "WiFi off");
 }
@@ -138,7 +150,9 @@ void loop() {
     unsigned long start = millis();
     struct state oldstate;
     memcpy(&oldstate, &state, sizeof(struct state));
+
     M5.update();
+    asyncWifiManager->loop();
 
     updateTouch(&state);
     updateTime(&state);
@@ -253,18 +267,53 @@ void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig) {
 }
 
 void initWiFi() {
-    ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
+    Router_SSID = asyncWifiManager->WiFi_SSID();
+    Router_Pass = asyncWifiManager->WiFi_Pass();
 
-    Router_SSID = ESPAsync_WiFiManager.WiFi_SSID();
-    Router_Pass = ESPAsync_WiFiManager.WiFi_Pass();
-
-    Serial.print("Router_SSID: " + Router_SSID);
-    Serial.println("; Router_Pass: " + Router_Pass);
+    Serial.println("Router_SSID: " + Router_SSID + "; Router_Pass: " + Router_Pass);
     if (!areRouterCredentialsValid()) {
         Serial.println("Disconnect WiFi in setup()");
         state.is_wifi_activated = false;
-        WiFi.disconnect(true, false);
+        WiFi.disconnect(false, false);
     }
+}
+
+void initAsyncWifiManager(struct state *state) {
+    asyncWifiManager = new ESPAsync_WiFiManager(&webServer, &dnsServer);
+    asyncWifiManager->setDebugOutput(true);
+    asyncWifiManager->setMinimumSignalQuality(-1);
+    asyncWifiManager->setConfigPortalChannel(0);
+    asyncWifiManager->setSaveConfigCallback(configPortalCallback);
+
+    mqttServer = new ESPAsync_WMParameter(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
+    mqttPort = new ESPAsync_WMParameter(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
+    mqttTopic = new ESPAsync_WMParameter(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
+    mqttDevice = new ESPAsync_WMParameter(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN - 1);
+    mqttUser = new ESPAsync_WMParameter(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN - 1);
+    mqttPassword = new ESPAsync_WMParameter(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN - 1);
+
+    asyncWifiManager->addParameter(mqttServer);
+    asyncWifiManager->addParameter(mqttPort);
+    asyncWifiManager->addParameter(mqttTopic);
+    asyncWifiManager->addParameter(mqttDevice);
+    asyncWifiManager->addParameter(mqttUser);
+    asyncWifiManager->addParameter(mqttPassword);
+
+#if !USE_DHCP_IP
+#if USE_CONFIGURABLE_DNS
+    // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
+    asyncWifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask, dns1IP, dns2IP);
+#else
+    // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
+    asyncWifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
+#endif
+#endif
+
+    if (areRouterCredentialsValid()) {
+        Serial.println("Got stored Credentials: " + Router_SSID);
+        asyncWifiManager->setConfigPortalTimeout(0);
+    } else 
+        Serial.println("No stored Credentials.");
 }
 
 void initSD() {
@@ -567,131 +616,51 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     }
 
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED) {
-        ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-        startWiFiManager(&ESPAsync_WiFiManager, oldstate, state);
+        Router_SSID = asyncWifiManager->WiFi_SSID();
+        Router_Pass = asyncWifiManager->WiFi_Pass();
+
+        if (areRouterCredentialsValid()) {
+            wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
+            Serial.println("Got Stored Credentials: " + Router_SSID);
+
+            loadConfigData();
+
+            for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
+                if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
+                    (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
+
+                    wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
+                }
+            }
+
+            if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated)
+                connectMultiWiFi();
+        } else {
+            state->wifi_info = infoConfigPortalCredentials;
+            drawScreen(oldstate, state);
+
+            Serial.println("No Saved WiFi Credentials. Starting Config Portal");
+            startWiFiManager(state);
+        }
     }
 
     if (state->is_requesting_reset) {
-        ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
-        resetWiFiManager(&ESPAsync_WiFiManager, state);
+        Router_SSID = "";
+        Router_Pass = "";
+        asyncWifiManager->resetSettings();
+
+        WiFi.disconnect(true, true);
+        state->wifi_status = WL_DISCONNECTED;
+
+        Serial.println("Start Configuration Portal for reset.");
+        startWiFiManager(state);
     }
 }
 
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state) {
-    unsigned long startedAt = millis();
-    ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
-    ESPAsync_WMParameter mqttPort(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
-    ESPAsync_WMParameter mqttTopic(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
-    ESPAsync_WMParameter mqttDevice(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN - 1);
-    ESPAsync_WMParameter mqttUser(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN - 1);
-    ESPAsync_WMParameter mqttPassword(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN - 1);
-
-    ESPAsync_WiFiManager->addParameter(&mqttServer);
-    ESPAsync_WiFiManager->addParameter(&mqttPort);
-    ESPAsync_WiFiManager->addParameter(&mqttTopic);
-    ESPAsync_WiFiManager->addParameter(&mqttDevice);
-    ESPAsync_WiFiManager->addParameter(&mqttUser);
-    ESPAsync_WiFiManager->addParameter(&mqttPassword);
-
-    setupWiFiManager(ESPAsync_WiFiManager);
-
-    Router_SSID = ESPAsync_WiFiManager->WiFi_SSID();
-    Router_Pass = ESPAsync_WiFiManager->WiFi_Pass();
-
-    if (areRouterCredentialsValid()) {
-        LOGERROR3(F("* Add SSID = "), Router_SSID, F(", PW = "), Router_Pass);
-        wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
-        ESPAsync_WiFiManager->setConfigPortalTimeout(0);
-        Serial.println("Got Stored Credentials: " + Router_SSID);
-
-        loadConfigData();
-
-        for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-            if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
-                (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
-                LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "),
-                          WM_config.WiFi_Creds[i].wifi_pw);
-                wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
-            }
-        }
-
-        if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated)
-            connectMultiWiFi();
-    } else {
-        Serial.println("No Credentials.");
-        Serial.println("Start Configuration Portal.");
-
-        state->wifi_info = infoConfigPortalCredentials;
-        drawScreen(oldstate, state);
-
-        ESPAsync_WiFiManager->setSaveConfigCallback(configPortalCallback);
-        if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password)) {
-            Serial.println("Not connected to WiFi but continuing anyway.");
-        } else {
-            Serial.println("WiFi connected :D");
-            Serial.println("WiFi Status: " + (String) state->wifi_status);
-            Serial.println("WiFi activated: " + (String) state->is_wifi_activated);
-        }
-
-        saveConfigPortalCredentials(ESPAsync_WiFiManager);
-
-        strncpy(state->mqttServer, mqttServer.getValue(), MQTT_SERVER_LEN);
-        strncpy(state->mqttPort, mqttPort.getValue(), MQTT_PORT_LEN);
-        strncpy(state->mqttTopic, mqttTopic.getValue(), MQTT_TOPIC_LEN);
-        strncpy(state->mqttDevice, mqttDevice.getValue(), MQTT_DEVICENAME_LEN);
-        strncpy(state->mqttUser, mqttUser.getValue(), MQTT_USERNAME_LEN);
-        strncpy(state->mqttPassword, mqttPassword.getValue(), MQTT_KEY_LEN);
-
-        saveMQTTConfig(state);
-    }
-
-    Serial.print("After waiting ");
-    Serial.print((float) (millis() - startedAt) / 1000L);
-    Serial.print(" secs more in loop(), connection result is ");
-
-    if (state->is_wifi_activated && state->wifi_status == WL_CONNECTED) {
-        Serial.print("connected. Local IP: ");
-        Serial.println(WiFi.localIP());
-    } else
-        Serial.println(ESPAsync_WiFiManager->getStatus(state->wifi_status));
-}
-
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state) {
-    Router_SSID = "";
-    Router_Pass = "";
-    ESPAsync_WiFiManager->resetSettings();
-
-    mqtt.disconnect();
-    WiFi.disconnect(true, true);
-    state->wifi_status = WL_DISCONNECTED;
-
-    ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
-    ESPAsync_WMParameter mqttPort(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
-    ESPAsync_WMParameter mqttTopic(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
-    ESPAsync_WMParameter mqttDevice(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN - 1);
-    ESPAsync_WMParameter mqttUser(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN - 1);
-    ESPAsync_WMParameter mqttPassword(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN - 1);
-
-    ESPAsync_WiFiManager->addParameter(&mqttServer);
-    ESPAsync_WiFiManager->addParameter(&mqttPort);
-    ESPAsync_WiFiManager->addParameter(&mqttTopic);
-    ESPAsync_WiFiManager->addParameter(&mqttDevice);
-    ESPAsync_WiFiManager->addParameter(&mqttUser);
-    ESPAsync_WiFiManager->addParameter(&mqttPassword);
-
-    setupWiFiManager(ESPAsync_WiFiManager);
-    Serial.println("Start Configuration Portal for reset.");
-    ESPAsync_WiFiManager->setSaveConfigCallback(configPortalCallback);
-    ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password);
-    saveConfigPortalCredentials(ESPAsync_WiFiManager);
-
-    strncpy(state->mqttServer, mqttServer.getValue(), MQTT_SERVER_LEN);
-    strncpy(state->mqttPort, mqttPort.getValue(), MQTT_PORT_LEN);
-    strncpy(state->mqttTopic, mqttTopic.getValue(), MQTT_TOPIC_LEN);
-    strncpy(state->mqttDevice, mqttDevice.getValue(), MQTT_DEVICENAME_LEN);
-    strncpy(state->mqttUser, mqttUser.getValue(), MQTT_USERNAME_LEN);
-    strncpy(state->mqttPassword, mqttPassword.getValue(), MQTT_KEY_LEN);
-
+void startWiFiManager(struct state *state) {
+    asyncWifiManager->setConfigPortalTimeout(120);
+    asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
+    saveConfigPortalCredentials();
     saveMQTTConfig(state);
 }
 
@@ -699,15 +668,24 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
 // AND a connection has been established
 void configPortalCallback() {
     state.is_requesting_reset = false;
+
+    strncpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
+    strncpy(state.mqttPort, mqttPort->getValue(), MQTT_PORT_LEN);
+    strncpy(state.mqttTopic, mqttTopic->getValue(), MQTT_TOPIC_LEN);
+    strncpy(state.mqttDevice, mqttDevice->getValue(), MQTT_DEVICENAME_LEN);
+    strncpy(state.mqttUser, mqttUser->getValue(), MQTT_USERNAME_LEN);
+    strncpy(state.mqttPassword, mqttPassword->getValue(), MQTT_KEY_LEN);
+
+    setMQTTServer(&state);
 }
 
-void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
-    if (String(ESPAsync_WiFiManager->getSSID(0)) != "" && String(ESPAsync_WiFiManager->getSSID(1)) != "") {
+void saveConfigPortalCredentials() {
+    if (String(asyncWifiManager->getSSID(0)) != "" && String(asyncWifiManager->getSSID(1)) != "") {
         memset(&WM_config, 0, sizeof(WM_config));
 
         for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-            String tempSSID = ESPAsync_WiFiManager->getSSID(i);
-            String tempPW = ESPAsync_WiFiManager->getPW(i);
+            String tempSSID = asyncWifiManager->getSSID(i);
+            String tempPW = asyncWifiManager->getPW(i);
 
             if (strlen(tempSSID.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1)
                 strcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str());
@@ -741,32 +719,6 @@ bool areRouterCredentialsValid() {
         Serial.println("valid creds: " + Router_SSID);
         return true;
     }
-}
-
-void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
-    ESPAsync_WiFiManager->setDebugOutput(true);
-    ESPAsync_WiFiManager->setAPStaticIPConfig(WM_AP_IPconfig);
-    ESPAsync_WiFiManager->setMinimumSignalQuality(-1);
-    ESPAsync_WiFiManager->setConfigPortalChannel(0);
-
-#if !USE_DHCP_IP
-#if USE_CONFIGURABLE_DNS
-    // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
-    ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask, dns1IP, dns2IP);
-#else
-    // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
-    ESPAsync_wifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
-#endif
-#endif
-
-    if (areRouterCredentialsValid()) {
-        Serial.println("Got stored Credentials: " + Router_SSID);
-        ESPAsync_WiFiManager->setConfigPortalTimeout(0);
-    } else {
-        Serial.println("No stored Credentials.");
-    }
-
-    ssid.toUpperCase();
 }
 
 void publishMQTT(struct state *state) {
@@ -1387,16 +1339,10 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setTextSize(1);
 
     if (state->wifi_info == infoConfigPortalCredentials) {
-        String wifiInfo = "Join " + ssid;
-        String ipInfo = "Open http://" +
-                        (String) APStaticIP[0] + "." +
-                        (String) APStaticIP[1] + "." +
-                        (String) APStaticIP[2] + "." +
-                        (String) APStaticIP[3];
+        String wifiInfo = "AP SSID : " + ssid;
         String pwInfo = "Password: " + (String) state->password;
-        DisbuffBody.drawString(wifiInfo, 25, 75);
-        DisbuffBody.drawString(pwInfo, 40, 95);
-        DisbuffBody.drawString(ipInfo, 20, 115);
+        DisbuffBody.drawString(wifiInfo, 15, 75);
+        DisbuffBody.drawString(pwInfo, 15, 95);
     } else if (state->wifi_info == infoWiFiConnected) {
         String connectedTo = (String) WiFi.SSID();
         String connectedInfo =

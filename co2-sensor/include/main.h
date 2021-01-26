@@ -180,6 +180,8 @@ void initSD();
 
 void initAirSensor();
 
+void initAsyncWifiManager(struct state *state);
+
 void checkIntervals(struct state *state);
 
 void checkWiFi();
@@ -202,17 +204,13 @@ void handleNavigation(struct state *state);
 
 void handleWiFi(struct state *oldstate, struct state *state);
 
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state);
-
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state);
+void startWiFiManager(struct state *state);
 
 void configPortalCallback();
 
-void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+void saveConfigPortalCredentials();
 
 bool areRouterCredentialsValid();
-
-void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
 void publishMQTT(struct state *state);
 
