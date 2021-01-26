@@ -31,7 +31,7 @@
 #include <smoca_logo.h>
 
 #define VERSION_NUMBER "1.0.0"
-#define VERSION_NUMBER_LEN 5
+#define VERSION_NUMBER_LEN 8
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
@@ -46,6 +46,8 @@
 #define MIN_AP_PASSWORD_SIZE 8
 #define USE_DHCP_IP true
 #define USE_CONFIGURABLE_DNS true
+
+#define MAX_CP_PASSWORD_LEN 16
 
 #define TIME_SYNC_HOUR 2
 #define TIME_SYNC_MIN rand() % 60
@@ -138,7 +140,7 @@ struct state {
     bool is_requesting_reset = false;
     wl_status_t wifi_status = WL_DISCONNECTED;
     enum info wifi_info = infoEmpty;
-    char password[MIN_AP_PASSWORD_SIZE + 1];
+    char password[MAX_CP_PASSWORD_LEN + 1];
     struct tm next_time_sync;
     bool is_sync_needed = false;
     bool force_sync = false;
@@ -204,7 +206,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
 
 void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state);
 
-void resetCallback();
+void configPortalCallback();
 
 void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 

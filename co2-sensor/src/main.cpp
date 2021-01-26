@@ -205,7 +205,7 @@ void loadStateFile() {
         state.auto_calibration_on = auto_cal_string == "1" ? true : false;
         state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
         state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
-        strncpy(state.password, password.c_str(), MIN_AP_PASSWORD_SIZE);
+        strncpy(state.password, password.c_str(), MAX_CP_PASSWORD_LEN);
         strncpy(state.newest_version, newest_version.c_str(), VERSION_NUMBER_LEN);
         Serial.println("Loaded state file.");
     } else {
@@ -218,8 +218,8 @@ void saveStateFile(struct state *oldstate, struct state *state) {
         state->auto_calibration_on == oldstate->auto_calibration_on &&
         state->calibration_value == oldstate->calibration_value &&
         state->is_wifi_activated == oldstate->is_wifi_activated &&
-        (String) state->password == (String) oldstate->password &&
-        (String) state->newest_version == (String) oldstate->newest_version) {
+        strncmp(state->password, oldstate->password, MAX_CP_PASSWORD_LEN) == 0 &&
+        strncmp(state->newest_version, oldstate->newest_version, VERSION_NUMBER_LEN) == 0) {
         return;
     }
 
@@ -579,7 +579,6 @@ void handleWiFi(struct state *oldstate, struct state *state) {
 
 void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state) {
     unsigned long startedAt = millis();
-
     ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
     ESPAsync_WMParameter mqttPort(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
     ESPAsync_WMParameter mqttTopic(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
@@ -625,7 +624,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
         state->wifi_info = infoConfigPortalCredentials;
         drawScreen(oldstate, state);
 
-        ESPAsync_WiFiManager->setSaveConfigCallback(resetCallback);
+        ESPAsync_WiFiManager->setSaveConfigCallback(configPortalCallback);
         if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password)) {
             Serial.println("Not connected to WiFi but continuing anyway.");
         } else {
@@ -682,7 +681,7 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
 
     setupWiFiManager(ESPAsync_WiFiManager);
     Serial.println("Start Configuration Portal for reset.");
-    ESPAsync_WiFiManager->setSaveConfigCallback(resetCallback);
+    ESPAsync_WiFiManager->setSaveConfigCallback(configPortalCallback);
     ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password);
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
 
@@ -696,7 +695,7 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     saveMQTTConfig(state);
 }
 
-void resetCallback() {
+void configPortalCallback() {
     state.is_requesting_reset = false;
 }
 
@@ -1054,7 +1053,7 @@ void updateCo2(struct state *state) {
 void updatePassword(struct state *state) {
     if ((String) state->password == "") {
         String password = randomPassword(8);
-        strncpy(state->password, password.c_str(), MIN_AP_PASSWORD_SIZE);
+        strncpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
         Serial.println(state->password);
     }
 }
@@ -1511,7 +1510,7 @@ void drawSyncSettings(struct state *oldstate, struct state *state) {
 void drawUpdateSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->wifi_status == oldstate->wifi_status &&
-        (String) state->newest_version == (String) oldstate->newest_version &&
+        strncmp(state->newest_version, oldstate->newest_version, VERSION_NUMBER_LEN) == 0 &&
         state->menu_mode == oldstate->menu_mode)
         return;
 
