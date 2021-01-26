@@ -31,6 +31,7 @@
 #include <smoca_logo.h>
 
 #define VERSION_NUMBER "1.0.0"
+#define VERSION_NUMBER_LEN 5
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
@@ -137,14 +138,14 @@ struct state {
     bool is_requesting_reset = false;
     wl_status_t wifi_status = WL_DISCONNECTED;
     enum info wifi_info = infoEmpty;
-    String password;
+    char password[MIN_AP_PASSWORD_SIZE + 1];
     struct tm next_time_sync;
     bool is_sync_needed = false;
     bool force_sync = false;
     enum info time_info = infoEmpty;
     bool is_requesting_update = false;
     enum info update_info = infoEmpty;
-    String newest_version;
+    char newest_version[VERSION_NUMBER_LEN + 1];
     bool is_mqtt_connected = false;
     char mqttServer[MQTT_SERVER_LEN];
     char mqttPort[MQTT_PORT_LEN];
