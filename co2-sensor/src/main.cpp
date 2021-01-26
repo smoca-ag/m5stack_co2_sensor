@@ -274,7 +274,7 @@ void initWiFi() {
     if (!areRouterCredentialsValid()) {
         Serial.println("Disconnect WiFi in setup()");
         state.is_wifi_activated = false;
-        WiFi.disconnect(false, false);
+        WiFi.disconnect(true, false);
     }
 }
 
@@ -283,6 +283,8 @@ void initAsyncWifiManager(struct state *state) {
     asyncWifiManager->setDebugOutput(true);
     asyncWifiManager->setMinimumSignalQuality(-1);
     asyncWifiManager->setConfigPortalChannel(0);
+    asyncWifiManager->setConfigPortalTimeout(120);
+    asyncWifiManager->setAPCallback(accessPointCallback);
     asyncWifiManager->setSaveConfigCallback(configPortalCallback);
 
     mqttServer = new ESPAsync_WMParameter(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
@@ -308,12 +310,6 @@ void initAsyncWifiManager(struct state *state) {
     asyncWifiManager->setSTAStaticIPConfig(stationIP, gatewayIP, netMask);
 #endif
 #endif
-
-    if (areRouterCredentialsValid()) {
-        Serial.println("Got stored Credentials: " + Router_SSID);
-        asyncWifiManager->setConfigPortalTimeout(0);
-    } else 
-        Serial.println("No stored Credentials.");
 }
 
 void initSD() {
@@ -621,7 +617,7 @@ void handleWiFi(struct state *oldstate, struct state *state) {
 
         if (areRouterCredentialsValid()) {
             wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
-            Serial.println("Got Stored Credentials: " + Router_SSID);
+            Serial.println("Got Stored Credentials: " + Router_SSID + "; " + Router_Pass);
 
             loadConfigData();
 
@@ -652,16 +648,19 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         WiFi.disconnect(true, true);
         state->wifi_status = WL_DISCONNECTED;
 
-        Serial.println("Start Configuration Portal for reset.");
+        Serial.println("Starting Configuration Portal for reset.");
         startWiFiManager(state);
     }
 }
 
 void startWiFiManager(struct state *state) {
-    asyncWifiManager->setConfigPortalTimeout(120);
     asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
     saveConfigPortalCredentials();
     saveMQTTConfig(state);
+}
+
+void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager) {
+    Serial.println("Access Point started sucessfully");
 }
 
 // This gets called when custom parameters have been set 

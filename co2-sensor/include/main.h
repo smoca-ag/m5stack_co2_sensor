@@ -36,7 +36,7 @@
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
 
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 3
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
 
 #define GRAPH_UNITS 240
 
@@ -205,6 +205,8 @@ void handleNavigation(struct state *state);
 void handleWiFi(struct state *oldstate, struct state *state);
 
 void startWiFiManager(struct state *state);
+
+void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager);
 
 void configPortalCallback();
 
