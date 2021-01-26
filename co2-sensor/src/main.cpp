@@ -571,7 +571,7 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         startWiFiManager(&ESPAsync_WiFiManager, oldstate, state);
     }
 
-    if (state->is_requesting_reset && !oldstate->is_requesting_reset) {
+    if (state->is_requesting_reset) {
         ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
         resetWiFiManager(&ESPAsync_WiFiManager, state);
     }
@@ -695,6 +695,8 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     saveMQTTConfig(state);
 }
 
+// This gets called when custom parameters have been set 
+// AND a connection has been established
 void configPortalCallback() {
     state.is_requesting_reset = false;
 }
