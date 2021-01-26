@@ -71,6 +71,96 @@
 #define MQTT_USERNAME_LEN 24
 #define MQTT_KEY_LEN 32
 
+typedef struct {
+    char wifi_ssid[MAX_SSID_LEN];
+    char wifi_pw[MAX_PW_LEN];
+} WiFiCredentials;
+
+typedef struct {
+    String wifi_ssid;
+    String wifi_pw;
+} WiFiCredentialsString;
+
+typedef struct {
+    WiFiCredentials WiFi_Creds[NUM_WIFI_CREDENTIALS];
+} WM_Config;
+
+enum graphMode {
+    graphModeCo2,
+    graphModeTemperature,
+    graphModeHumidity,
+    graphModeBatteryMah,
+    graphModeLogo
+};
+
+enum menuMode {
+    menuModeGraphs,
+    menuModeCalibrationSettings,
+    menuModeCalibrationAlert,
+    menuModeWiFiSettings,
+    menuModeMQTTSettings,
+    menuModeTimeSettings,
+    menuModeUpdateSettings
+};
+
+enum info {
+    infoCalSuccess,
+    infoConfigPortalCredentials,
+    infoWiFiConnected,
+    infoWiFiFailed,
+    infoWiFiLost,
+    infoTimeSyncSuccess,
+    infoTimeSyncFailed,
+    infoUpdateFailed,
+    infoEmpty
+};
+
+struct state {
+    int co2_ppm;
+    int temperature_celsius;
+    int humidity_percent;
+    int battery_percent;
+    float battery_mah;
+    float battery_voltage;
+    float battery_current;
+    bool in_ac;
+    struct tm current_time;
+    int graph_index;
+    enum graphMode graph_mode;
+    bool display_sleep = false;
+    float battery_capacity;
+    enum menuMode menu_mode = menuModeGraphs;
+    bool auto_calibration_on = false;
+    int calibration_value = 400;
+    enum info cal_info = infoEmpty;
+    bool is_wifi_activated = false;
+    bool is_requesting_reset = false;
+    wl_status_t wifi_status = WL_DISCONNECTED;
+    enum info wifi_info = infoEmpty;
+    String password;
+    struct tm next_time_sync;
+    bool is_sync_needed = false;
+    bool force_sync = false;
+    enum info time_info = infoEmpty;
+    bool is_requesting_update = false;
+    enum info update_info = infoEmpty;
+    String newest_version;
+    bool is_mqtt_connected = false;
+    char mqttServer[MQTT_SERVER_LEN];
+    char mqttPort[MQTT_PORT_LEN];
+    char mqttDevice[MQTT_DEVICENAME_LEN];
+    char mqttTopic[MQTT_TOPIC_LEN];
+    char mqttUser[MQTT_USERNAME_LEN];
+    char mqttPassword[MQTT_KEY_LEN];
+};
+
+struct graph {
+    float co2[GRAPH_UNITS];
+    float temperature[GRAPH_UNITS];
+    float humidity[GRAPH_UNITS];
+    float batteryMah[GRAPH_UNITS];
+};
+
 String randomPassword();
 
 void loadStateFile();
