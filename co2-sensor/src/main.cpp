@@ -17,87 +17,8 @@
 
 #include <main.h>
 
-typedef struct {
-    char wifi_ssid[MAX_SSID_LEN];
-    char wifi_pw[MAX_PW_LEN];
-} WiFiCredentials;
-
-typedef struct {
-    String wifi_ssid;
-    String wifi_pw;
-} WiFiCredentialsString;
-
-typedef struct {
-    WiFiCredentials WiFi_Creds[NUM_WIFI_CREDENTIALS];
-} WM_Config;
-
-enum graphMode {
-    graphModeCo2,
-    graphModeTemperature,
-    graphModeHumidity,
-    graphModeBatteryMah,
-    graphModeLogo
-};
-
-enum menuMode {
-    menuModeGraphs,
-    menuModeCalibrationSettings,
-    menuModeCalibrationAlert,
-    menuModeWiFiSettings,
-    menuModeTimeSettings,
-    menuModeUpdateSettings
-};
-
-enum info {
-    infoCalSuccess,
-    infoConfigPortalCredentials,
-    infoWiFiConnected,
-    infoWiFiFailed,
-    infoWiFiLost,
-    infoTimeSyncSuccess,
-    infoTimeSyncFailed,
-    infoUpdateFailed,
-    infoEmpty
-};
-
-struct state {
-    int co2_ppm;
-    int temperature_celsius;
-    int humidity_percent;
-    int battery_percent;
-    float battery_mah;
-    float battery_voltage;
-    float battery_current;
-    bool in_ac;
-    struct tm current_time;
-    int graph_index;
-    enum graphMode graph_mode;
-    bool display_sleep = false;
-    float battery_capacity;
-    enum menuMode menu_mode = menuModeGraphs;
-    bool auto_calibration_on = false;
-    int calibration_value = 400;
-    enum info cal_info = infoEmpty;
-    bool is_wifi_activated = false;
-    bool is_requesting_reset = false;
-    wl_status_t wifi_status = WL_DISCONNECTED;
-    enum info wifi_info = infoEmpty;
-    String password;
-    struct tm next_time_sync;
-    bool is_sync_needed = false;
-    bool force_sync = false;
-    enum info time_info = infoEmpty;
-    bool is_requesting_update = false;
-    enum info update_info = infoEmpty;
-    String newest_version;
-} state;
-
-struct graph {
-    float co2[GRAPH_UNITS];
-    float temperature[GRAPH_UNITS];
-    float humidity[GRAPH_UNITS];
-    float batteryMah[GRAPH_UNITS];
-} graph;
+struct state state;
+struct graph graph;
 
 // background, text, outline
 ButtonColors offWhite = {BLACK, WHITE, WHITE};
@@ -154,6 +75,9 @@ DNSServer dnsServer;
 String Router_SSID;
 String Router_Pass;
 
+WiFiClient client;
+PubSubClient mqtt(client);
+
 // statistics
 unsigned long cycle;
 int target_fps = 20;
@@ -172,6 +96,8 @@ void setup() {
     M5.Axp.EnableCoulombcounter();
     M5.Axp.SetLed(M5.Axp.isACIN() ? 1 : 0);
 
+    mqtt.setBufferSize(512);
+
     // Initialize SPIFFS
     if (!SPIFFS.begin(true)) {
         Serial.println("An Error has occurred while mounting SPIFFS");
@@ -179,6 +105,7 @@ void setup() {
     }
 
     loadStateFile();
+    loadMQTTConfig();
     setDisplayPower(true);
     setTimeFromRtc();
     printTime();
@@ -222,14 +149,15 @@ void loop() {
     updatePassword(&state);
     updateWiFiState(&oldstate, &state);
     updateTimeState(&oldstate, &state);
+    updateMQTT(&state);
 
     syncData(&state);
     saveStateFile(&oldstate, &state);
-
     drawScreen(&oldstate, &state);
+
     handleWiFi(&oldstate, &state);
-    checkWiFiStatus();
-    handleUpdate(&oldstate, &state);
+    checkIntervals(&state);
+    handleFirmware(&oldstate, &state);
 
     writeSsd(&state);
     cycle++;
@@ -277,9 +205,9 @@ void loadStateFile() {
         state.auto_calibration_on = auto_cal_string == "1" ? true : false;
         state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
         state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
-        state.password = password;
-        state.newest_version = newest_version;
-        Serial.println("Loaded state file." + state.newest_version);
+        strncpy(state.password, password.c_str(), MAX_CP_PASSWORD_LEN);
+        strncpy(state.newest_version, newest_version.c_str(), VERSION_NUMBER_LEN);
+        Serial.println("Loaded state file.");
     } else {
         Serial.println("state file could not be read.");
     }
@@ -290,8 +218,8 @@ void saveStateFile(struct state *oldstate, struct state *state) {
         state->auto_calibration_on == oldstate->auto_calibration_on &&
         state->calibration_value == oldstate->calibration_value &&
         state->is_wifi_activated == oldstate->is_wifi_activated &&
-        state->password == oldstate->password &&
-        state->newest_version == oldstate->newest_version) {
+        strncmp(state->password, oldstate->password, MAX_CP_PASSWORD_LEN) == 0 &&
+        strncmp(state->newest_version, oldstate->newest_version, VERSION_NUMBER_LEN) == 0) {
         return;
     }
 
@@ -301,8 +229,8 @@ void saveStateFile(struct state *oldstate, struct state *state) {
             (String) state->auto_calibration_on + "\n" +
             (String) state->calibration_value + "\n" +
             (String) state->is_wifi_activated + "\n" +
-            state->password + "\n" +
-            state->newest_version + "\n"
+            (String) state->password + "\n" +
+            (String) state->newest_version + "\n"
     );
     f.close();
     Serial.println("State file saved");
@@ -330,12 +258,12 @@ void initWiFi() {
     Router_SSID = ESPAsync_WiFiManager.WiFi_SSID();
     Router_Pass = ESPAsync_WiFiManager.WiFi_Pass();
 
-    bool isValid = areRouterCredentialsValid();
-    Serial.println("Router_SSID: " + Router_SSID);
-    if (!isValid) {
+    Serial.print("Router_SSID: " + Router_SSID);
+    Serial.println("; Router_Pass: " + Router_Pass);
+    if (!areRouterCredentialsValid()) {
         Serial.println("Disconnect WiFi in setup()");
         state.is_wifi_activated = false;
-        disconnectWiFi(true, false);
+        WiFi.disconnect(true, false);
     }
 }
 
@@ -388,16 +316,40 @@ void initAirSensor() {
     airSensor.setAltitudeCompensation(440);
 }
 
-void checkWiFiStatus() {
-    static ulong checkwifi_timeout = 0;
-    static ulong current_millis;
-
+void checkIntervals(struct state *state) {
 #define WIFICHECK_INTERVAL 1000L
+#define MQTT_PUBLISH_INTERVAL 60000L
+#define MQTT_CHECK_CONNECTION 2000L
+
+    static ulong checkwifi_timeout = 0;
+    static ulong checkmqtt_timeout = 0;
+    static ulong checkmqtt_connection_timeout = 0;
+    static ulong current_millis;
     current_millis = millis();
 
     if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
         checkWiFi();
         checkwifi_timeout = current_millis + WIFICHECK_INTERVAL;
+    }
+
+    if (current_millis > checkmqtt_connection_timeout || checkmqtt_connection_timeout == 0) {
+        if (!mqtt.connected() && state->wifi_status == WL_CONNECTED &&
+            (String) state->mqttServer != "" && (String) state->mqttPort != "") {
+            setMQTTServer(state);
+            MQTTConnect(state);
+        } else if (mqtt.connected() && state->wifi_status != WL_CONNECTED)
+            mqtt.disconnect();
+    
+        checkmqtt_connection_timeout = current_millis + MQTT_CHECK_CONNECTION; 
+    }
+
+    if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
+        if (state->wifi_status == WL_CONNECTED &&
+            (String) state->mqttTopic != "" &&
+            mqtt.connected()) 
+            publishMQTT(state);
+
+        checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
     }
 }
 
@@ -461,11 +413,6 @@ uint8_t connectMultiWiFi() {
     return status;
 }
 
-void disconnectWiFi(bool wifiOff, bool eraseAP) {
-    WiFi.disconnect(wifiOff, eraseAP);
-    Serial.println("WiFi is disabled.");
-}
-
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
 #if USE_CONFIGURABLE_DNS
     // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
@@ -484,6 +431,68 @@ void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
 #if USE_CONFIGURABLE_DNS
     LOGERROR3(F("dns1IP ="), in_WM_STA_IPconfig._sta_static_dns1, ", dns2IP =", in_WM_STA_IPconfig._sta_static_dns2);
 #endif
+}
+
+void loadMQTTConfig() {
+    File file = SPIFFS.open(MQTT_FILENAME, "r");
+
+    if (!file) {
+        Serial.println("failed to open mqtt file for reading");
+        return;
+    }
+
+    size_t size = file.size();
+    std::unique_ptr<char[]> buf(new char[size + 1]);
+    file.readBytes(buf.get(), size);
+    file.close();
+
+    DynamicJsonDocument json(1024);
+    DeserializationError error = deserializeJson(json, buf.get());
+
+    if (error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.f_str());
+        return;
+    }
+
+    if (json.containsKey(MQTT_SERVER_Label))
+        strncpy(state.mqttServer, json[MQTT_SERVER_Label], MQTT_SERVER_LEN);
+
+    if (json.containsKey(MQTT_SERVERPORT_Label))
+        strncpy(state.mqttPort, json[MQTT_SERVERPORT_Label], MQTT_PORT_LEN);
+
+    if (json.containsKey(MQTT_TOPIC_Label))
+        strncpy(state.mqttTopic, json[MQTT_TOPIC_Label], MQTT_TOPIC_LEN);
+
+    if (json.containsKey(MQTT_DEVICENAME_Label))
+        strncpy(state.mqttDevice, json[MQTT_DEVICENAME_Label], MQTT_DEVICENAME_LEN);
+
+    if (json.containsKey(MQTT_USERNAME_Label))
+        strncpy(state.mqttUser, json[MQTT_USERNAME_Label], MQTT_USERNAME_LEN);
+
+    if (json.containsKey(MQTT_KEY_Label))
+        strncpy(state.mqttPassword, json[MQTT_KEY_Label], MQTT_KEY_LEN);
+}
+
+void saveMQTTConfig(struct state *state) {
+    DynamicJsonDocument json(1024);
+
+    json[MQTT_SERVER_Label] = state->mqttServer;
+    json[MQTT_SERVERPORT_Label] = state->mqttPort;
+    json[MQTT_TOPIC_Label] = state->mqttTopic;
+    json[MQTT_DEVICENAME_Label] = state->mqttDevice;
+    json[MQTT_USERNAME_Label] = state->mqttUser;
+    json[MQTT_KEY_Label] = state->mqttPassword;
+
+    File file = SPIFFS.open(MQTT_FILENAME, "w");
+
+    if (!file) {
+        Serial.println("failed to open mqtt file to for writing");
+        return;
+    }
+
+    serializeJson(json, file);
+    file.close();
 }
 
 void loadConfigData() {
@@ -528,6 +537,10 @@ void handleNavigation(struct state *state) {
             break;
 
         case menuModeWiFiSettings:
+            state->menu_mode = menuModeMQTTSettings;
+            break;
+
+        case menuModeMQTTSettings:
             state->menu_mode = menuModeTimeSettings;
             break;
 
@@ -549,24 +562,37 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
         state->is_wifi_activated = false;
 
-    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
-        disconnectWiFi(true, false);
+    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED) {
+        WiFi.disconnect(true, false);
+    }
 
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED) {
         ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
         startWiFiManager(&ESPAsync_WiFiManager, oldstate, state);
     }
 
-    if (state->is_requesting_reset && !oldstate->is_requesting_reset) {
+    if (state->is_requesting_reset) {
         ESPAsync_WiFiManager ESPAsync_WiFiManager(&webServer, &dnsServer);
         resetWiFiManager(&ESPAsync_WiFiManager, state);
     }
 }
 
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
-                      struct state *oldstate,
-                      struct state *state) {
+void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state) {
     unsigned long startedAt = millis();
+    ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
+    ESPAsync_WMParameter mqttPort(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
+    ESPAsync_WMParameter mqttTopic(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
+    ESPAsync_WMParameter mqttDevice(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN - 1);
+    ESPAsync_WMParameter mqttUser(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN - 1);
+    ESPAsync_WMParameter mqttPassword(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN - 1);
+
+    ESPAsync_WiFiManager->addParameter(&mqttServer);
+    ESPAsync_WiFiManager->addParameter(&mqttPort);
+    ESPAsync_WiFiManager->addParameter(&mqttTopic);
+    ESPAsync_WiFiManager->addParameter(&mqttDevice);
+    ESPAsync_WiFiManager->addParameter(&mqttUser);
+    ESPAsync_WiFiManager->addParameter(&mqttPassword);
+
     setupWiFiManager(ESPAsync_WiFiManager);
 
     Router_SSID = ESPAsync_WiFiManager->WiFi_SSID();
@@ -598,8 +624,8 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
         state->wifi_info = infoConfigPortalCredentials;
         drawScreen(oldstate, state);
 
-        if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(),
-                                                     (const char *) state->password.c_str())) {
+        ESPAsync_WiFiManager->setSaveConfigCallback(configPortalCallback);
+        if (!ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password)) {
             Serial.println("Not connected to WiFi but continuing anyway.");
         } else {
             Serial.println("WiFi connected :D");
@@ -608,6 +634,15 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager,
         }
 
         saveConfigPortalCredentials(ESPAsync_WiFiManager);
+
+        strncpy(state->mqttServer, mqttServer.getValue(), MQTT_SERVER_LEN);
+        strncpy(state->mqttPort, mqttPort.getValue(), MQTT_PORT_LEN);
+        strncpy(state->mqttTopic, mqttTopic.getValue(), MQTT_TOPIC_LEN);
+        strncpy(state->mqttDevice, mqttDevice.getValue(), MQTT_DEVICENAME_LEN);
+        strncpy(state->mqttUser, mqttUser.getValue(), MQTT_USERNAME_LEN);
+        strncpy(state->mqttPassword, mqttPassword.getValue(), MQTT_KEY_LEN);
+
+        saveMQTTConfig(state);
     }
 
     Serial.print("After waiting ");
@@ -625,16 +660,44 @@ void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
     Router_SSID = "";
     Router_Pass = "";
     ESPAsync_WiFiManager->resetSettings();
+
+    mqtt.disconnect();
+    WiFi.disconnect(true, true);
     state->wifi_status = WL_DISCONNECTED;
+
+    ESPAsync_WMParameter mqttServer(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
+    ESPAsync_WMParameter mqttPort(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
+    ESPAsync_WMParameter mqttTopic(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
+    ESPAsync_WMParameter mqttDevice(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN - 1);
+    ESPAsync_WMParameter mqttUser(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN - 1);
+    ESPAsync_WMParameter mqttPassword(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN - 1);
+
+    ESPAsync_WiFiManager->addParameter(&mqttServer);
+    ESPAsync_WiFiManager->addParameter(&mqttPort);
+    ESPAsync_WiFiManager->addParameter(&mqttTopic);
+    ESPAsync_WiFiManager->addParameter(&mqttDevice);
+    ESPAsync_WiFiManager->addParameter(&mqttUser);
+    ESPAsync_WiFiManager->addParameter(&mqttPassword);
 
     setupWiFiManager(ESPAsync_WiFiManager);
     Serial.println("Start Configuration Portal for reset.");
-    ESPAsync_WiFiManager->setSaveConfigCallback(resetCallback);
-    ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password.c_str());
+    ESPAsync_WiFiManager->setSaveConfigCallback(configPortalCallback);
+    ESPAsync_WiFiManager->startConfigPortal((const char *) ssid.c_str(), (const char *) state->password);
     saveConfigPortalCredentials(ESPAsync_WiFiManager);
+
+    strncpy(state->mqttServer, mqttServer.getValue(), MQTT_SERVER_LEN);
+    strncpy(state->mqttPort, mqttPort.getValue(), MQTT_PORT_LEN);
+    strncpy(state->mqttTopic, mqttTopic.getValue(), MQTT_TOPIC_LEN);
+    strncpy(state->mqttDevice, mqttDevice.getValue(), MQTT_DEVICENAME_LEN);
+    strncpy(state->mqttUser, mqttUser.getValue(), MQTT_USERNAME_LEN);
+    strncpy(state->mqttPassword, mqttPassword.getValue(), MQTT_KEY_LEN);
+
+    saveMQTTConfig(state);
 }
 
-void resetCallback() {
+// This gets called when custom parameters have been set 
+// AND a connection has been established
+void configPortalCallback() {
     state.is_requesting_reset = false;
 }
 
@@ -682,7 +745,7 @@ bool areRouterCredentialsValid() {
 
 void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     ESPAsync_WiFiManager->setDebugOutput(true);
-    ESPAsync_WiFiManager->setAPStaticIPConfig(WM_AP_IPconfig); // set custom IP
+    ESPAsync_WiFiManager->setAPStaticIPConfig(WM_AP_IPconfig);
     ESPAsync_WiFiManager->setMinimumSignalQuality(-1);
     ESPAsync_WiFiManager->setConfigPortalChannel(0);
 
@@ -706,7 +769,68 @@ void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager) {
     ssid.toUpperCase();
 }
 
-void handleUpdate(struct state *oldstate, struct state *state) {
+void publishMQTT(struct state *state) {
+    String co2Topic = (String) state->mqttTopic + (String) TOPIC_CO2;
+    String humidityTopic = (String) state->mqttTopic + (String) TOPIC_HUMIDITY;
+    String temperatureTopic = (String) state->mqttTopic + (String) TOPIC_TEMPERATURE;
+
+    String co2 = (String) state->co2_ppm;
+    String humidity = (String) ((double) state->humidity_percent / 10);
+    String temperature = (String) ((double) state->temperature_celsius / 10);
+
+    if (mqtt.publish((const char *) co2Topic.c_str(), (const char *) co2.c_str()))
+        Serial.println("Published co2 to MQTT");
+
+    if (mqtt.publish((const char *) humidityTopic.c_str(), (const char *) humidity.c_str()))
+        Serial.println("Published humidity to MQTT");
+
+    if (mqtt.publish((const char *) temperatureTopic.c_str(), (const char *) temperature.c_str()))
+        Serial.println("Published temperature to MQTT");
+}
+
+void setMQTTServer(struct state *state) {
+    IPAddress serverIP;
+    if (serverIP.fromString((String) state->mqttServer)) {
+        int ip[4];
+        sscanf(state->mqttServer, "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]);
+        serverIP = IPAddress(ip[0], ip[1], ip[2], ip[3]);
+        Serial.print("Setting ip Server: ");
+        Serial.println((String) state->mqttServer + ", " + (String) state->mqttPort);
+        mqtt.setServer(serverIP, atoi(state->mqttPort));
+    } else {
+        Serial.print("Setting char Server: ");
+        Serial.println((String) state->mqttServer + ", " + (String) state->mqttPort);
+        mqtt.setServer((const char *) state->mqttServer, atoi(state->mqttPort));
+    }
+}
+
+bool MQTTConnect(struct state *state) {
+    if (mqtt.connected())
+        return true;
+
+    char clientID[MQTT_DEVICENAME_LEN];
+    strncpy(clientID, (String) state->mqttDevice == "" ? ssid.c_str() : state->mqttDevice, MQTT_DEVICENAME_LEN);
+
+    if ((String) state->mqttUser != "" && (String) state->mqttPassword != "") {
+        if (mqtt.connect(clientID, state->mqttUser, state->mqttPassword)) {
+            Serial.println(F("MQTT connection successful!"));
+            return true;
+        }
+    } else {
+        if (mqtt.connect(clientID)) {
+            Serial.println(F("MQTT connection successful!"));
+            return true;
+        }
+    }
+
+    Serial.print("MQTT connection failed: ");
+    Serial.println(mqtt.state());
+
+    Serial.println("Could not connect to MQTT");
+    return false;
+}
+
+void handleFirmware(struct state *oldstate, struct state *state) {
     if (state->is_requesting_update == oldstate->is_requesting_update)
         return;
 
@@ -751,7 +875,7 @@ void handleUpdate(struct state *oldstate, struct state *state) {
     }
 }
 
-void fetchRemoteVersion(struct state *state) {
+bool fetchRemoteVersion(struct state *state) {
     if (state->wifi_status == WL_CONNECTED) {
         HTTPClient http;
         String versionFile = "http://" + (String) FIRMWARE_SERVER + (String) REMOTE_VERSION_FILE;
@@ -761,7 +885,7 @@ void fetchRemoteVersion(struct state *state) {
         if (httpCode <= 0) {
             Serial.print("Fetching version failed, error: ");
             Serial.println(http.errorToString(httpCode));
-            return;
+            return false;
         }
 
         WiFiClient client = http.getStream();
@@ -771,61 +895,79 @@ void fetchRemoteVersion(struct state *state) {
         if (error) {
             Serial.print("deserializeJson() failed: ");
             Serial.println(error.f_str());
-            return;
+            return false;
         }
 
-        state->newest_version = doc["version"].as<String>();
+        strncpy(state->newest_version, doc["version"].as<char *>(), VERSION_NUMBER_LEN);
         http.end();
+        return true;
     }
+    return false;
 }
 
 void updateTouch(struct state *state) {
-    if (state->menu_mode == menuModeGraphs) {
-        if (batteryButton.wasPressed())
-            state->graph_mode = graphModeBatteryMah;
-        if (co2Button.wasPressed())
-            state->graph_mode = graphModeCo2;
-        if (midLeftButton.wasPressed())
-            state->graph_mode = graphModeTemperature;
-        if (midRightButton.wasPressed())
-            state->graph_mode = graphModeHumidity;
-    } else if (state->menu_mode == menuModeCalibrationSettings) {
-        if (midLeftButton.wasPressed())
-            state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
-        if (midRightButton.wasPressed())
-            state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
-        if (toggleAutoCalButton.wasPressed()) {
-            state->auto_calibration_on = !state->auto_calibration_on;
-            airSensor.setAutoSelfCalibration(state->auto_calibration_on);
-        }
-        if (submitCalibrationButton.wasPressed())
-            state->menu_mode = menuModeCalibrationAlert;
-    } else if (state->menu_mode == menuModeCalibrationAlert) {
-        if (submitCalibrationButton.wasPressed()) {
-            airSensor.setForcedRecalibrationFactor(state->calibration_value);
-            state->menu_mode = menuModeCalibrationSettings;
-            state->cal_info = infoCalSuccess;
-        }
-        if (toggleAutoCalButton.wasPressed())
-            state->menu_mode = menuModeCalibrationSettings;
-    } else if (state->menu_mode == menuModeWiFiSettings) {
-        if (toggleWiFiButton.wasPressed())
-            state->is_wifi_activated = !state->is_wifi_activated;
-        if (resetWiFiButton.wasPressed()) {
-            state->is_requesting_reset = true;
-        }
-    } else if (state->menu_mode == menuModeTimeSettings) {
-        if (syncTimeButton.wasPressed())
-            state->force_sync = true;
-    } else if (state->menu_mode == menuModeUpdateSettings) {
-        if (syncTimeButton.wasPressed())
-            state->is_requesting_update = true;
-    }
+    switch(state->menu_mode) {
+        case menuModeGraphs: 
+            if (batteryButton.wasPressed())
+                state->graph_mode = graphModeBatteryMah;
+            if (co2Button.wasPressed())
+                state->graph_mode = graphModeCo2;
+            if (midLeftButton.wasPressed())
+                state->graph_mode = graphModeTemperature;
+            if (midRightButton.wasPressed())
+                state->graph_mode = graphModeHumidity;
+            break;
 
+        case menuModeCalibrationSettings:
+            if (midLeftButton.wasPressed())
+                state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
+            if (midRightButton.wasPressed())
+                state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
+            if (toggleAutoCalButton.wasPressed()) {
+                state->auto_calibration_on = !state->auto_calibration_on;
+                airSensor.setAutoSelfCalibration(state->auto_calibration_on);
+            }
+            if (submitCalibrationButton.wasPressed())
+                state->menu_mode = menuModeCalibrationAlert;
+            break;
+
+        case menuModeCalibrationAlert: 
+            if (submitCalibrationButton.wasPressed()) {
+                airSensor.setForcedRecalibrationFactor(state->calibration_value);
+                state->menu_mode = menuModeCalibrationSettings;
+                state->cal_info = infoCalSuccess;
+            }
+            if (toggleAutoCalButton.wasPressed())
+                state->menu_mode = menuModeCalibrationSettings;
+            break;
+
+        case menuModeWiFiSettings:
+            if (toggleWiFiButton.wasPressed())
+                state->is_wifi_activated = !state->is_wifi_activated;
+            if (resetWiFiButton.wasPressed()) {
+                state->is_requesting_reset = true;
+            }
+            break;
+
+        case menuModeTimeSettings:
+            if (syncTimeButton.wasPressed())
+                state->force_sync = true;
+            break;
+
+        case menuModeUpdateSettings:
+            if (syncTimeButton.wasPressed())
+                state->is_requesting_update = true;
+            break;
+        
+        default: 
+            break;
+    }
+ 
     if (M5.BtnA.wasPressed()) {
         setDisplayPower(state->display_sleep);
         state->display_sleep = !state->display_sleep;
     }
+
     if (M5.BtnC.wasPressed()) {
         handleNavigation(state);
     }
@@ -911,8 +1053,9 @@ void updateCo2(struct state *state) {
 }
 
 void updatePassword(struct state *state) {
-    if (state->password == "") {
-        state->password = randomPassword(8);
+    if ((String) state->password == "") {
+        String password = randomPassword(8);
+        strncpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
         Serial.println(state->password);
     }
 }
@@ -929,8 +1072,6 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
         state->wifi_info = infoWiFiConnected;
     else if (state->wifi_status == WL_CONNECT_FAILED)
         state->wifi_info = infoWiFiFailed;
-    else if (state->wifi_status == WL_DISCONNECTED)
-        state->wifi_info = infoEmpty;
     else if (state->wifi_status == WL_CONNECTION_LOST)
         state->wifi_info = infoWiFiLost;
     else
@@ -950,6 +1091,15 @@ void updateTimeState(struct state *oldstate, struct state *state) {
 
     if (mktime(&state->current_time) > mktime(&state->next_time_sync))
         state->is_sync_needed = true;
+}
+
+void updateMQTT(struct state *state) {
+    if (mqtt.loop())
+        state->is_mqtt_connected = true;
+    else {
+        mqtt.disconnect();
+        state->is_mqtt_connected = false;
+    }
 }
 
 void createSprites() {
@@ -1009,6 +1159,9 @@ void drawScreen(struct state *oldstate, struct state *state) {
             state->cal_info = infoEmpty;
             clearScreen(oldstate, state);
             drawWiFiSettings(oldstate, state);
+        } else if (state->menu_mode == menuModeMQTTSettings) {
+            clearScreen(oldstate, state);
+            drawMQTTSettings(oldstate, state);
         } else if (state->menu_mode == menuModeTimeSettings) {
             clearScreen(oldstate, state);
             drawSyncSettings(oldstate, state);
@@ -1041,14 +1194,12 @@ void drawHeader(struct state *oldstate, struct state *state) {
 }
 
 void drawValues(struct state *oldstate, struct state *state) {
-    if (
-            state->temperature_celsius == oldstate->temperature_celsius &&
-            state->humidity_percent == oldstate->humidity_percent &&
-            state->co2_ppm == oldstate->co2_ppm &&
-            state->display_sleep == oldstate->display_sleep &&
-            state->menu_mode == oldstate->menu_mode) {
+    if (state->temperature_celsius == oldstate->temperature_celsius &&
+        state->humidity_percent == oldstate->humidity_percent &&
+        state->co2_ppm == oldstate->co2_ppm &&
+        state->display_sleep == oldstate->display_sleep &&
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffValue.fillRect(0, 0, 320, 116, BLACK);
     DisbuffValue.setFreeFont(&FreeMonoBold18pt7b);
@@ -1074,9 +1225,8 @@ void drawGraph(struct state *oldstate, struct state *state) {
     if (state->graph_mode == oldstate->graph_mode &&
         state->graph_index == oldstate->graph_index &&
         state->display_sleep == oldstate->display_sleep &&
-        state->menu_mode == oldstate->menu_mode) {
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffGraph.fillRect(0, 0, 320, 97, BLACK);
 
@@ -1141,9 +1291,8 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state) {
         state->calibration_value == oldstate->calibration_value &&
         state->auto_calibration_on == oldstate->auto_calibration_on &&
         state->cal_info == oldstate->cal_info &&
-        state->menu_mode == oldstate->menu_mode) {
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 
@@ -1201,12 +1350,12 @@ void drawCalibrationAlert(struct state *oldstate, struct state *state) {
 
     DisbuffBody.setFreeFont(&FreeMono12pt7b);
     String ppm = String(state->calibration_value) + "ppm";
-    String info1 = "Change Calibration";
-    String info2 = "to " + ppm + " ?";
-    String info3 = "This can't be undone.";
-    DisbuffBody.drawString(info1, 30, 55);
-    DisbuffBody.drawString(info2, 85, 80);
-    DisbuffBody.drawString(info3, 20, 105);
+    String info0 = "Change Calibration";
+    String info1 = "to " + ppm + " ?";
+    String info2 = "This can't be undone.";
+    DisbuffBody.drawString(info0, 30, 55);
+    DisbuffBody.drawString(info1, 85, 80);
+    DisbuffBody.drawString(info2, 20, 105);
 
     DisbuffBody.pushSprite(0, 26);
 
@@ -1224,9 +1373,8 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
         state->is_requesting_reset == oldstate->is_requesting_reset &&
         state->wifi_status == oldstate->wifi_status &&
         state->wifi_info == oldstate->wifi_info &&
-        state->menu_mode == oldstate->menu_mode) {
+        state->menu_mode == oldstate->menu_mode)
         return;
-    }
 
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 
@@ -1245,7 +1393,7 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
                         (String) APStaticIP[1] + "." +
                         (String) APStaticIP[2] + "." +
                         (String) APStaticIP[3];
-        String pwInfo = "Password: " + state->password;
+        String pwInfo = "Password: " + (String) state->password;
         DisbuffBody.drawString(wifiInfo, 25, 75);
         DisbuffBody.drawString(pwInfo, 40, 95);
         DisbuffBody.drawString(ipInfo, 20, 115);
@@ -1271,6 +1419,50 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
 
     if (state->is_wifi_activated)
         resetWiFiButton.draw();
+}
+
+void drawMQTTSettings(struct state *oldstate, struct state *state) {
+    if (state->display_sleep == oldstate->display_sleep &&
+        state->is_mqtt_connected == oldstate->is_mqtt_connected &&
+        state->mqttServer == oldstate->mqttServer &&
+        state->mqttPort == oldstate->mqttPort &&
+        state->mqttDevice == oldstate->mqttDevice &&
+        state->menu_mode == oldstate->menu_mode)
+        return;
+
+    DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+    DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
+    DisbuffBody.setTextColor(WHITE);
+    DisbuffBody.setTextSize(2);
+    DisbuffBody.drawString("MQTT", 75, 10);
+
+    DisbuffBody.setFreeFont(&FreeMono9pt7b);
+    DisbuffBody.setTextSize(1);
+
+    if (state->is_mqtt_connected) {
+        DisbuffBody.setTextColor(GREEN);
+        DisbuffBody.drawString("Connected", 100, 80);
+        DisbuffBody.setTextColor(WHITE);
+    } else {
+        DisbuffBody.setTextColor(RED);
+        DisbuffBody.drawString("Not Connected", 85, 80);
+        DisbuffBody.setTextColor(WHITE);
+    }
+
+    String server = ((String) state->mqttServer == "" ? "Not Configured" : (String) state->mqttServer);
+    String port = (String) state->mqttPort == "" ? "Not Configured" : (String) state->mqttPort;
+    String user = (String) state->mqttDevice == "" ? ssid : (String) state->mqttDevice;
+
+    String info0 = "Server: " + (server.length() > 18 ? (server.substring(0, 14) + "...") : server);
+    String info1 = "Port  : " + port;
+    String info2 = "Device: " + (user.length() > 18 ? (user.substring(0, 14) + "...") : user);
+
+    DisbuffBody.drawString(info0, 15, 100);
+    DisbuffBody.drawString(info1, 15, 115);
+    DisbuffBody.drawString(info2, 15, 130);
+
+    DisbuffBody.pushSprite(0, 26);
 }
 
 void drawSyncSettings(struct state *oldstate, struct state *state) {
@@ -1320,7 +1512,7 @@ void drawSyncSettings(struct state *oldstate, struct state *state) {
 void drawUpdateSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->wifi_status == oldstate->wifi_status &&
-        state->newest_version == oldstate->newest_version &&
+        strncmp(state->newest_version, oldstate->newest_version, VERSION_NUMBER_LEN) == 0 &&
         state->menu_mode == oldstate->menu_mode)
         return;
 
@@ -1334,10 +1526,10 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
-    String info1 = "Version: " + (String) VERSION_NUMBER;
-    String info2 = "Newest: " + (state->newest_version == "" ? "N/A" : state->newest_version);
-    DisbuffBody.drawString(info1, 80, 80);
-    DisbuffBody.drawString(info2, 85, 100);
+    String info0 = "Version: " + (String) VERSION_NUMBER;
+    String info1 = "Newest: " + ((String) state->newest_version == "" ? "N/A" : (String) state->newest_version);
+    DisbuffBody.drawString(info0, 80, 80);
+    DisbuffBody.drawString(info1, 85, 100);
 
     if (state->update_info == infoUpdateFailed) {
         DisbuffBody.setTextColor(RED);
@@ -1353,14 +1545,14 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.pushSprite(0, 26);
 
     // always push Disbuff before drawing buttons, otherwise button is not visible
-    if (needFirmwareUpdate(VERSION_NUMBER, (const char *) state->newest_version.c_str())) {
+    if (needFirmwareUpdate(VERSION_NUMBER, (const char *) state->newest_version)) {
         syncTimeButton.setLabel("Update Firmware");
         syncTimeButton.draw();
     }
 }
 
 void hideButtons() {
-    for (Button* button : Button::instances) {
+    for (Button *button : Button::instances) {
         if (button->getName() == M5.BtnA.getName() ||
             button->getName() == M5.BtnB.getName() ||
             button->getName() == M5.BtnC.getName() ||
@@ -1459,29 +1651,33 @@ void syncData(struct state *state) {
         return;
 
     if (state->force_sync) {
-        fetchRemoteVersion(state);
-        setRtc(state);
+        if (fetchRemoteVersion(state) && setRtc(state))
+            state->time_info = infoTimeSyncSuccess;
+        else 
+            state->time_info = infoTimeSyncFailed;
         state->force_sync = false;
     } else if (state->is_sync_needed) {
-        fetchRemoteVersion(state);
-        setRtc(state);
-        getLocalTime(&(state->current_time));
-        state->next_time_sync = state->current_time;
-        state->next_time_sync.tm_mday++;
-        state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
-        state->next_time_sync.tm_min = TIME_SYNC_MIN;
+         if (fetchRemoteVersion(state) && setRtc(state)) {
+            state->time_info = infoTimeSyncSuccess;
+            getLocalTime(&(state->current_time));
+            state->next_time_sync = state->current_time;
+            state->next_time_sync.tm_mday++;
+            state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
+            state->next_time_sync.tm_min = TIME_SYNC_MIN;
+         } else 
+            state->time_info = infoTimeSyncFailed;
+        
         state->is_sync_needed = false;
     }
 }
 
-void setRtc(struct state *state) {
+bool setRtc(struct state *state) {
     configTime(0, 0, "pool.ntp.org");
 
     struct tm timeinfo;
     if (!getLocalTime(&timeinfo)) {
         Serial.println("Failed to obtain time");
-        state->time_info = infoTimeSyncFailed;
-        return;
+        return false;
     }
 
     RTC_TimeTypeDef rtctime;
@@ -1498,7 +1694,7 @@ void setRtc(struct state *state) {
     M5.Rtc.SetTime(&rtctime);
     Serial.print("Synced time to: ");
     Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-    state->time_info = infoTimeSyncSuccess;
+    return true;
 }
 
 void setTimeFromRtc() {

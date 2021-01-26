@@ -25,9 +25,13 @@
 #include <HTTPClient.h>
 #include <Update.h>
 
+// mqtt
+#include <PubSubClient.h>
+
 #include <smoca_logo.h>
 
 #define VERSION_NUMBER "1.0.0"
+#define VERSION_NUMBER_LEN 8
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
@@ -43,17 +47,128 @@
 #define USE_DHCP_IP true
 #define USE_CONFIGURABLE_DNS true
 
+#define MAX_CP_PASSWORD_LEN 16
+
 #define TIME_SYNC_HOUR 2
 #define TIME_SYNC_MIN rand() % 60
 
 #define STATE_FILENAME "/state"
+#define MQTT_FILENAME "/mqtt.json"
 #define CONFIG_FILENAME "/wifi_config"
+
+#define TOPIC_CO2 "/co2"
+#define TOPIC_HUMIDITY "/humidity"
+#define TOPIC_TEMPERATURE "/temperature"
+
+#define MQTT_SERVER_Label "MQTT_SERVER_Label"
+#define MQTT_SERVERPORT_Label "MQTT_SERVERPORT_Label"
+#define MQTT_DEVICENAME_Label "MQTT_DEVICENAME_Label"
+#define MQTT_TOPIC_Label "MQTT_TOPIC_Label"
+#define MQTT_USERNAME_Label "MQTT_USERNAME_Label"
+#define MQTT_KEY_Label "MQTT_KEY_Label"
+
+#define MQTT_SERVER_LEN 64
+#define MQTT_PORT_LEN 8
+#define MQTT_DEVICENAME_LEN 24
+#define MQTT_TOPIC_LEN 64
+#define MQTT_USERNAME_LEN 24
+#define MQTT_KEY_LEN 32
+
+typedef struct {
+    char wifi_ssid[MAX_SSID_LEN];
+    char wifi_pw[MAX_PW_LEN];
+} WiFiCredentials;
+
+typedef struct {
+    String wifi_ssid;
+    String wifi_pw;
+} WiFiCredentialsString;
+
+typedef struct {
+    WiFiCredentials WiFi_Creds[NUM_WIFI_CREDENTIALS];
+} WM_Config;
+
+enum graphMode {
+    graphModeCo2,
+    graphModeTemperature,
+    graphModeHumidity,
+    graphModeBatteryMah,
+    graphModeLogo
+};
+
+enum menuMode {
+    menuModeGraphs,
+    menuModeCalibrationSettings,
+    menuModeCalibrationAlert,
+    menuModeWiFiSettings,
+    menuModeMQTTSettings,
+    menuModeTimeSettings,
+    menuModeUpdateSettings
+};
+
+enum info {
+    infoCalSuccess,
+    infoConfigPortalCredentials,
+    infoWiFiConnected,
+    infoWiFiFailed,
+    infoWiFiLost,
+    infoTimeSyncSuccess,
+    infoTimeSyncFailed,
+    infoUpdateFailed,
+    infoEmpty
+};
+
+struct state {
+    int co2_ppm;
+    int temperature_celsius;
+    int humidity_percent;
+    int battery_percent;
+    float battery_mah;
+    float battery_voltage;
+    float battery_current;
+    bool in_ac;
+    struct tm current_time;
+    int graph_index;
+    enum graphMode graph_mode;
+    bool display_sleep = false;
+    float battery_capacity;
+    enum menuMode menu_mode = menuModeGraphs;
+    bool auto_calibration_on = false;
+    int calibration_value = 400;
+    enum info cal_info = infoEmpty;
+    bool is_wifi_activated = false;
+    bool is_requesting_reset = false;
+    wl_status_t wifi_status = WL_DISCONNECTED;
+    enum info wifi_info = infoEmpty;
+    char password[MAX_CP_PASSWORD_LEN + 1];
+    struct tm next_time_sync;
+    bool is_sync_needed = false;
+    bool force_sync = false;
+    enum info time_info = infoEmpty;
+    bool is_requesting_update = false;
+    enum info update_info = infoEmpty;
+    char newest_version[VERSION_NUMBER_LEN + 1];
+    bool is_mqtt_connected = false;
+    char mqttServer[MQTT_SERVER_LEN];
+    char mqttPort[MQTT_PORT_LEN];
+    char mqttDevice[MQTT_DEVICENAME_LEN];
+    char mqttTopic[MQTT_TOPIC_LEN];
+    char mqttUser[MQTT_USERNAME_LEN];
+    char mqttPassword[MQTT_KEY_LEN];
+};
+
+struct graph {
+    float co2[GRAPH_UNITS];
+    float temperature[GRAPH_UNITS];
+    float humidity[GRAPH_UNITS];
+    float batteryMah[GRAPH_UNITS];
+};
 
 String randomPassword();
 
 void loadStateFile();
 
-void saveStateFile();
+void saveStateFile(struct state *oldstate, struct state *state);
 
 void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig);
 
@@ -65,17 +180,19 @@ void initSD();
 
 void initAirSensor();
 
-void checkWiFiStatus();
+void checkIntervals(struct state *state);
 
 void checkWiFi();
 
 uint8_t connectMultiWiFi();
 
-void disconnectWiFi(bool wifiOff, bool eraseAP);
-
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);
+
+void loadMQTTConfig();
+
+void saveMQTTConfig(struct state *state);
 
 void loadConfigData();
 
@@ -89,7 +206,7 @@ void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *
 
 void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state);
 
-void resetCallback();
+void configPortalCallback();
 
 void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
@@ -97,9 +214,15 @@ bool areRouterCredentialsValid();
 
 void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
-void handleUpdate(struct state *oldstate, struct state *state);
+void publishMQTT(struct state *state);
 
-void fetchRemoteVersion(struct state *state);
+void setMQTTServer(struct state *state);
+
+bool MQTTConnect(struct state *state);
+
+void handleFirmware(struct state *oldstate, struct state *state);
+
+bool fetchRemoteVersion(struct state *state);
 
 void updateTouch(struct state *state);
 
@@ -121,6 +244,8 @@ void updateWiFiState(struct state *oldstate, struct state *state);
 
 void updateTimeState(struct state *oldstate, struct state *state);
 
+void updateMQTT(struct state *state);
+
 void createSprites();
 
 uint16_t co2color(int value);
@@ -138,6 +263,8 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state);
 void drawCalibrationAlert(struct state *oldstate, struct state *state);
 
 void drawWiFiSettings(struct state *oldstate, struct state *state);
+
+void drawMQTTSettings(struct state *oldstate, struct state *state);
 
 void drawSyncSettings(struct state *oldstate, struct state *state);
 
@@ -159,7 +286,7 @@ void printTime();
 
 void syncData(struct state *state);
 
-void setRtc(struct state *state);
+bool setRtc(struct state *state);
 
 void setTimeFromRtc();
 
