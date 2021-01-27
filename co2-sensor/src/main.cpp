@@ -138,7 +138,6 @@ void setup() {
     initSD();
     initAirSensor();
     initAsyncWifiManager(&state);
-    initWiFi();
     initAPIPConfigStruct(WM_AP_IPconfig);
     initSTAIPConfigStruct(WM_STA_IPconfig);
 
@@ -171,12 +170,10 @@ void loop() {
     handleWiFi(&oldstate, &state);
     checkIntervals(&state);
     handleFirmware(&oldstate, &state);
-
     writeSsd(&state);
-    cycle++;
-
     asyncWifiManager->loop();
 
+    cycle++;
     unsigned long duration = millis() - start;
     if (duration < frame_duration_ms) {
         delay(frame_duration_ms - duration);
@@ -267,18 +264,6 @@ void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig) {
 #endif
 }
 
-void initWiFi() {
-    Router_SSID = asyncWifiManager->WiFi_SSID();
-    Router_Pass = asyncWifiManager->WiFi_Pass();
-
-    Serial.println("Router_SSID: " + Router_SSID + "; Router_Pass: " + Router_Pass);
-    if (!areRouterCredentialsValid()) {
-        Serial.println("Disconnect WiFi in setup()");
-        state.is_wifi_activated = false;
-        WiFi.disconnect(true, false);
-    }
-}
-
 void initAsyncWifiManager(struct state *state) {
     asyncWifiManager = new ESPAsync_WiFiManager(&webServer, &dnsServer);
     asyncWifiManager->setDebugOutput(true);
@@ -363,7 +348,7 @@ void initAirSensor() {
 }
 
 void checkIntervals(struct state *state) {
-#define WIFICHECK_INTERVAL 1000L
+#define WIFICHECK_INTERVAL 2000L
 #define MQTT_PUBLISH_INTERVAL 60000L
 #define MQTT_CHECK_CONNECTION 2000L
 
@@ -374,7 +359,7 @@ void checkIntervals(struct state *state) {
     current_millis = millis();
 
     if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
-        checkWiFi();
+        connectWiFi(state);
         checkwifi_timeout = current_millis + WIFICHECK_INTERVAL;
     }
 
@@ -397,33 +382,25 @@ void checkIntervals(struct state *state) {
     }
 }
 
-void checkWiFi() {
-    if ((state.wifi_status == WL_CONNECTION_LOST ||
-        state.wifi_status == WL_CONNECT_FAILED ||
-        state.wifi_status == WL_NO_SSID_AVAIL) && 
-        state.is_wifi_activated) {
-        Serial.println("Not connected. Trying to reconnect. Status: " + (String) state.wifi_status);
+void connectWiFi(struct state *state) {
+    if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated && !state->is_config_running) {
+        Serial.println("Not connected. Trying to reconnect. Status: " + (String) state->wifi_status);
         if (connectMultiWiFi() != WL_CONNECTED)
             Serial.println("Could not reconnect WiFi.");
     }
 }
 
 uint8_t connectMultiWiFi() {
-#define WIFI_MULTI_1ST_CONNECT_WAITING_MS 0
-#define WIFI_MULTI_CONNECT_WAITING_MS 50L
     uint8_t status;
     LOGERROR(F("ConnectMultiWiFi with :"));
 
-    if (areRouterCredentialsValid()) {
+    if (Router_SSID != "")
         LOGERROR3(F("* Flash-stored Router_SSID = "), Router_SSID, F(", Router_Pass = "), Router_Pass);
-    }
 
     for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
         if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
-            strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) {
-            LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "),
-                      WM_config.WiFi_Creds[i].wifi_pw);
-        }
+            strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)
+            LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw);
     }
 
     LOGERROR(F("Connecting MultiWifi..."));
@@ -433,27 +410,14 @@ uint8_t connectMultiWiFi() {
     configWiFi(WM_STA_IPconfig);
 #endif
 
-    int i = 0;
     status = wifiMulti.run();
-    delay(WIFI_MULTI_1ST_CONNECT_WAITING_MS);
-
-    while ((i++ < 10) && (status != WL_CONNECTED)) {
-        status = wifiMulti.run();
-
-        if (status == WL_CONNECTED)
-            break;
-        else
-            delay(WIFI_MULTI_CONNECT_WAITING_MS);
-    }
 
     if (status == WL_CONNECTED) {
-        LOGERROR1(F("WiFi connected after time: "), i);
+        LOGERROR0(F("WiFi connected. "));
         LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
         LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP());
-        Serial.println("WiFi Connected SSID: " + (String) WiFi.SSID());
-    } else {
+    } else
         LOGERROR3(F("WiFi not connected."), " ", "Status: ", (String) status);
-    }
 
     return status;
 }
@@ -607,42 +571,27 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
         state->is_wifi_activated = false;
 
-    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED) {
+    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
         WiFi.disconnect(true, false);
-    }
 
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_running) {
         Router_SSID = asyncWifiManager->WiFi_SSID();
         Router_Pass = asyncWifiManager->WiFi_Pass();
 
-        if (areRouterCredentialsValid()) {
-            wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
-            Serial.println("Got Stored Credentials: " + Router_SSID + "; " + Router_Pass);
-
-            loadConfigData();
-
-            for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-                if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
-                    (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
-
-                    wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
-                }
-            }
-
-            if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated)
-                connectMultiWiFi();
-        } else {
+        if (Router_SSID == "") {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
             startWiFiManager(state);
+        } else {
+            wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
         }
     }
 
-    if (state->is_requesting_reset && !state->is_config_running) {
+    if (state->is_requesting_reset && !state->is_config_running && state->is_wifi_activated) {
         Router_SSID = "";
         Router_Pass = "";
-        asyncWifiManager->resetSettings();
 
-        WiFi.disconnect(true, true);
+        asyncWifiManager->resetSettings();
+        WiFi.disconnect(false, true);
         state->is_requesting_reset = false;
 
         Serial.println("Starting Configuration Portal for reset.");
@@ -658,13 +607,13 @@ void startWiFiManager(struct state *state) {
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager) {
     state.is_config_running = true;
-    Serial.println("Access Point started sucessfully");
+    Serial.println("Config Portal started sucessfully");
 }
 
 // This gets called when custom parameters have been set 
 // AND a connection has been established
 void configPortalCallback() {
-    Serial.println("Access Point closing.");
+    Serial.println("Config Portal closed");
     state.is_config_running = false;
 
     strncpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
@@ -706,16 +655,6 @@ void saveConfigPortalCredentials() {
         }
 
         saveConfigData();
-    }
-}
-
-bool areRouterCredentialsValid() {
-    if (Router_SSID == "" || Router_SSID == "0") {
-        Serial.println("invalid creds: " + Router_SSID);
-        return false;
-    } else {
-        Serial.println("valid creds: " + Router_SSID);
-        return true;
     }
 }
 
@@ -1350,14 +1289,16 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     } else if (state->wifi_info == infoWiFiConnected) {
         String connectedTo = (String) WiFi.SSID();
         String connectedInfo =
-                "Connected: " + ((connectedTo.length() > 15) ? (connectedTo.substring(0, 14) + "...") : connectedTo);
-        DisbuffBody.drawString(connectedInfo, 40, 90);
+                "Connected: " + ((connectedTo.length() > 18) ? (connectedTo.substring(0, 15) + "...") : connectedTo);
+        String ipInfo = "Local IP : " + WiFi.localIP().toString();
+        DisbuffBody.drawString(connectedInfo, 15, 90);
+        DisbuffBody.drawString(ipInfo, 15, 110);
     } else if (state->wifi_info == infoWiFiLost) {
         DisbuffBody.setTextColor(RED);
-        DisbuffBody.drawString("Connection lost", 40, 90);
+        DisbuffBody.drawString("Connection lost", 80, 90);
     } else if (state->wifi_info == infoWiFiFailed) {
         DisbuffBody.setTextColor(RED);
-        DisbuffBody.drawString("Connection failed", 60, 90);
+        DisbuffBody.drawString("Connection failed", 75, 90);
     }
 
     DisbuffBody.pushSprite(0, 26);

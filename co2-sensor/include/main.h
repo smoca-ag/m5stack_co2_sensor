@@ -185,7 +185,7 @@ void initAsyncWifiManager(struct state *state);
 
 void checkIntervals(struct state *state);
 
-void checkWiFi();
+void connectWiFi(struct state *state);
 
 uint8_t connectMultiWiFi();
 
