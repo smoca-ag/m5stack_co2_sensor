@@ -40,10 +40,10 @@ Button midRightButton(161, 104, 164, 40, false, "midRight", offWhite, onWhite, B
 Button toggleAutoCalButton(15, 175, 130, 50, false, "Auto Cal: OFF", offRed, onRed);
 Button submitCalibrationButton(175, 175, 130, 50, false, "Calibrate", offCyan, onCyan);
 
-Button toggleWiFiButton(20, 175, 120, 50, false, "OFF", offRed, onRed);
-Button resetWiFiButton(180, 175, 120, 50, false, "Reset", offCyan, onCyan);
+Button toggleWiFiButton(15, 175, 130, 50, false, "OFF", offRed, onRed);
+Button resetWiFiButton(175, 175, 130, 50, false, "Reset", offCyan, onCyan);
 
-Button syncTimeButton(20, 175, 280, 50, false, "Sync Time", offCyan, onCyan);
+Button syncTimeButton(15, 175, 290, 50, false, "Sync Time", offCyan, onCyan);
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
@@ -398,12 +398,13 @@ void checkIntervals(struct state *state) {
 }
 
 void checkWiFi() {
-    if ((state.wifi_status == WL_DISCONNECTED && state.is_wifi_activated)) {
-        Serial.println("WiFi lost. Trying to reconnect. Status: " + (String) state.wifi_status);
-        if (connectMultiWiFi() != WL_CONNECTED) {
-            Serial.println("WiFi turned off.");
-            state.is_wifi_activated = false;
-        }
+    if ((state.wifi_status == WL_CONNECTION_LOST ||
+        state.wifi_status == WL_CONNECT_FAILED ||
+        state.wifi_status == WL_NO_SSID_AVAIL) && 
+        state.is_wifi_activated) {
+        Serial.println("Not connected. Trying to reconnect. Status: " + (String) state.wifi_status);
+        if (connectMultiWiFi() != WL_CONNECTED)
+            Serial.println("Could not reconnect WiFi.");
     }
 }
 
@@ -610,7 +611,7 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         WiFi.disconnect(true, false);
     }
 
-    if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_started) {
+    if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_running) {
         Router_SSID = asyncWifiManager->WiFi_SSID();
         Router_Pass = asyncWifiManager->WiFi_Pass();
 
@@ -631,15 +632,12 @@ void handleWiFi(struct state *oldstate, struct state *state) {
             if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated)
                 connectMultiWiFi();
         } else {
-            state->wifi_info = infoConfigPortalCredentials;
-            drawScreen(oldstate, state);
-
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
             startWiFiManager(state);
         }
     }
 
-    if (state->is_requesting_reset && !state->is_config_started) {
+    if (state->is_requesting_reset && !state->is_config_running) {
         Router_SSID = "";
         Router_Pass = "";
         asyncWifiManager->resetSettings();
@@ -659,14 +657,15 @@ void startWiFiManager(struct state *state) {
 }
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager) {
-    state.is_config_started = true;
+    state.is_config_running = true;
     Serial.println("Access Point started sucessfully");
 }
 
 // This gets called when custom parameters have been set 
 // AND a connection has been established
 void configPortalCallback() {
-    state.is_config_started = false;
+    Serial.println("Access Point closing.");
+    state.is_config_running = false;
 
     strncpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
     strncpy(state.mqttPort, mqttPort->getValue(), MQTT_PORT_LEN);
@@ -893,7 +892,7 @@ void updateTouch(struct state *state) {
             break;
 
         case menuModeWiFiSettings:
-            if (toggleWiFiButton.wasPressed())
+            if (toggleWiFiButton.wasPressed() && !state->is_config_running)
                 state->is_wifi_activated = !state->is_wifi_activated;
             if (resetWiFiButton.wasPressed()) {
                 state->is_requesting_reset = true;
@@ -1016,10 +1015,11 @@ void updatePassword(struct state *state) {
 
 void updateWiFiState(struct state *oldstate, struct state *state) {
     if (WiFi.status() == oldstate->wifi_status &&
-        state->is_requesting_reset == oldstate->is_requesting_reset)
+        state->is_requesting_reset == oldstate->is_requesting_reset &&
+        state->is_wifi_activated == oldstate->is_wifi_activated &&
+        state->is_config_running == oldstate->is_config_running)
         return;
 
-    Serial.println("updating wifi status ...");
     state->wifi_status = WiFi.status();
 
     if (state->wifi_status == WL_CONNECTED)
@@ -1031,12 +1031,13 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
     else
         state->wifi_info = infoEmpty;
 
-    if (state->is_requesting_reset)
+    if (state->is_config_running)
         state->wifi_info = infoConfigPortalCredentials;
-    else if (state->menu_mode == menuModeWiFiSettings)
-        drawWiFiSettings(oldstate, state);
 
-    Serial.println("WiFi Status: " + (String) state->wifi_status);
+    if (!state->is_wifi_activated)
+        state->wifi_info = infoEmpty;
+
+    Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
 }
 
 void updateTimeState(struct state *oldstate, struct state *state) {
