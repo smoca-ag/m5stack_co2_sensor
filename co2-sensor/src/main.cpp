@@ -1340,15 +1340,16 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     if (state->wifi_info == infoConfigPortalCredentials) {
         String wifiInfo = "AP SSID : " + ssid;
         String pwInfo = "Password: " + (String) state->password;
-        DisbuffBody.drawString(wifiInfo, 15, 75);
-        DisbuffBody.drawString(pwInfo, 15, 95);
+        DisbuffBody.drawString(wifiInfo, 15, 80);
+        DisbuffBody.drawString(pwInfo, 15, 100);
+        DisbuffBody.drawString("Open http://192.168.4.1", 15, 120);
     } else if (state->wifi_info == infoWiFiConnected) {
         String connectedTo = (String) WiFi.SSID();
         String connectedInfo =
                 "Connected: " + ((connectedTo.length() > 15) ? (connectedTo.substring(0, 14) + "...") : connectedTo);
         DisbuffBody.drawString(connectedInfo, 40, 90);
     } else if (state->wifi_info == infoWiFiLost) {
-        DisbuffBody.setTextColor(YELLOW);
+        DisbuffBody.setTextColor(RED);
         DisbuffBody.drawString("Connection lost", 40, 90);
     } else if (state->wifi_info == infoWiFiFailed) {
         DisbuffBody.setTextColor(RED);
@@ -1471,10 +1472,12 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
     DisbuffBody.setTextSize(1);
 
+    String newest = (String) state->newest_version == "" ? "N/A" : (String) state->newest_version;
+
     String info0 = "Version: " + (String) VERSION_NUMBER;
-    String info1 = "Newest: " + ((String) state->newest_version == "" ? "N/A" : (String) state->newest_version);
+    String info1 = "Newest : " + newest;
     DisbuffBody.drawString(info0, 80, 80);
-    DisbuffBody.drawString(info1, 85, 100);
+    DisbuffBody.drawString(info1, 80, 100);
 
     if (state->update_info == infoUpdateFailed) {
         DisbuffBody.setTextColor(RED);
