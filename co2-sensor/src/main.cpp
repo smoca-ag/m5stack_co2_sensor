@@ -152,7 +152,6 @@ void loop() {
     memcpy(&oldstate, &state, sizeof(struct state));
 
     M5.update();
-    asyncWifiManager->loop();
 
     updateTouch(&state);
     updateTime(&state);
@@ -175,6 +174,8 @@ void loop() {
 
     writeSsd(&state);
     cycle++;
+
+    asyncWifiManager->loop();
 
     unsigned long duration = millis() - start;
     if (duration < frame_duration_ms) {
@@ -389,9 +390,7 @@ void checkIntervals(struct state *state) {
     }
 
     if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
-        if (state->wifi_status == WL_CONNECTED &&
-            (String) state->mqttTopic != "" &&
-            mqtt.connected()) 
+        if (state->wifi_status == WL_CONNECTED && (String) state->mqttTopic != "" && mqtt.connected()) 
             publishMQTT(state);
 
         checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
@@ -399,7 +398,7 @@ void checkIntervals(struct state *state) {
 }
 
 void checkWiFi() {
-    if ((state.wifi_status != WL_CONNECTED && state.is_wifi_activated)) {
+    if ((state.wifi_status == WL_DISCONNECTED && state.is_wifi_activated)) {
         Serial.println("WiFi lost. Trying to reconnect. Status: " + (String) state.wifi_status);
         if (connectMultiWiFi() != WL_CONNECTED) {
             Serial.println("WiFi turned off.");
@@ -611,7 +610,7 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         WiFi.disconnect(true, false);
     }
 
-    if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED) {
+    if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_started) {
         Router_SSID = asyncWifiManager->WiFi_SSID();
         Router_Pass = asyncWifiManager->WiFi_Pass();
 
@@ -640,13 +639,13 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         }
     }
 
-    if (state->is_requesting_reset) {
+    if (state->is_requesting_reset && !state->is_config_started) {
         Router_SSID = "";
         Router_Pass = "";
         asyncWifiManager->resetSettings();
 
         WiFi.disconnect(true, true);
-        state->wifi_status = WL_DISCONNECTED;
+        state->is_requesting_reset = false;
 
         Serial.println("Starting Configuration Portal for reset.");
         startWiFiManager(state);
@@ -660,13 +659,14 @@ void startWiFiManager(struct state *state) {
 }
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager) {
+    state.is_config_started = true;
     Serial.println("Access Point started sucessfully");
 }
 
 // This gets called when custom parameters have been set 
 // AND a connection has been established
 void configPortalCallback() {
-    state.is_requesting_reset = false;
+    state.is_config_started = false;
 
     strncpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
     strncpy(state.mqttPort, mqttPort->getValue(), MQTT_PORT_LEN);

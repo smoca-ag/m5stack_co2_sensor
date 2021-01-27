@@ -137,6 +137,7 @@ struct state {
     int calibration_value = 400;
     enum info cal_info = infoEmpty;
     bool is_wifi_activated = false;
+    bool is_config_started = false;
     bool is_requesting_reset = false;
     wl_status_t wifi_status = WL_DISCONNECTED;
     enum info wifi_info = infoEmpty;
