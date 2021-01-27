@@ -915,8 +915,11 @@ void updateTouch(struct state *state) {
     }
  
     if (M5.BtnA.wasPressed()) {
-        setDisplayPower(state->display_sleep);
-        state->display_sleep = !state->display_sleep;
+        if (state->menu_mode == menuModeGraphs) {     
+            setDisplayPower(state->display_sleep);
+            state->display_sleep = !state->display_sleep;
+        } else
+            state->menu_mode = menuModeGraphs;
     }
 
     if (M5.BtnC.wasPressed()) {
