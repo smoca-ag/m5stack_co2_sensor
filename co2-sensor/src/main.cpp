@@ -67,7 +67,6 @@ AsyncWebServer webServer(80);
 SCD30 airSensor;
 
 WM_Config WM_config;
-WiFi_AP_IPConfig WM_AP_IPconfig;
 WiFi_STA_IPConfig WM_STA_IPconfig;
 WiFiMulti wifiMulti;
 
@@ -138,11 +137,11 @@ void setup() {
     initSD();
     initAirSensor();
     initAsyncWifiManager(&state);
-    initAPIPConfigStruct(WM_AP_IPconfig);
     initSTAIPConfigStruct(WM_STA_IPconfig);
 
     cycle = 0;
-    Serial.println(state.is_wifi_activated ? "WiFi on" : "WiFi off");
+    Serial.print(state.is_wifi_activated ? "WiFi on" : "WiFi off");
+    Serial.println(" status: " + (String) WiFi.status());
 }
 
 void loop() {
@@ -160,6 +159,7 @@ void loop() {
     updateLed(&oldstate, &state);
     updatePassword(&state);
     updateWiFiState(&oldstate, &state);
+    updateWiFiInfo(&oldstate, &state);
     updateTimeState(&oldstate, &state);
     updateMQTT(&state);
 
@@ -246,12 +246,6 @@ void saveStateFile(struct state *oldstate, struct state *state) {
     );
     f.close();
     Serial.println("State file saved");
-}
-
-void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig) {
-    in_WM_AP_IPconfig._ap_static_ip = APStaticIP;
-    in_WM_AP_IPconfig._ap_static_gw = APStaticGW;
-    in_WM_AP_IPconfig._ap_static_sn = APStaticSN;
 }
 
 void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig) {
@@ -504,7 +498,7 @@ void saveMQTTConfig(struct state *state) {
     file.close();
 }
 
-void loadConfigData() {
+bool loadConfigData() {
     File file = SPIFFS.open(CONFIG_FILENAME, "r");
     LOGERROR(F("LoadWiFiCfgFile "));
     memset(&WM_config, 0, sizeof(WM_config));
@@ -516,8 +510,10 @@ void loadConfigData() {
         file.close();
         LOGERROR(F("OK"));
         displayIPConfigStruct(WM_STA_IPconfig);
+        return true;
     } else {
         LOGERROR(F("failed"));
+        return false;
     }
 }
 
@@ -568,9 +564,6 @@ void handleNavigation(struct state *state) {
 }
 
 void handleWiFi(struct state *oldstate, struct state *state) {
-    if (state->is_wifi_activated && state->wifi_status == WL_CONNECT_FAILED)
-        state->is_wifi_activated = false;
-
     if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
         WiFi.disconnect(true, false);
 
@@ -578,15 +571,24 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         Router_SSID = asyncWifiManager->WiFi_SSID();
         Router_Pass = asyncWifiManager->WiFi_Pass();
 
-        if (Router_SSID == "") {
+        if (Router_SSID != "" && Router_Pass != "") {
+            Serial.println("Got Self-Stored Credentials");
+            wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
+        } else if (loadConfigData()) { 
+            Serial.println("Got stored credentials");
+
+            for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
+                if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
+                    (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE))
+                    wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
+            }
+        } else {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
             startWiFiManager(state);
-        } else {
-            wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
         }
     }
 
-    if (state->is_requesting_reset && !state->is_config_running && state->is_wifi_activated) {
+    if (state->is_wifi_activated && state->is_requesting_reset && !state->is_config_running) {
         Router_SSID = "";
         Router_Pass = "";
 
@@ -646,10 +648,8 @@ void saveConfigPortalCredentials() {
                 strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
 
             if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
-                String(WM_config.WiFi_Creds[i].wifi_ssid) != "0" &&
                 strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) {
-                LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "),
-                          WM_config.WiFi_Creds[i].wifi_pw);
+                LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw);
                 wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
             }
         }
@@ -953,13 +953,19 @@ void updatePassword(struct state *state) {
 }
 
 void updateWiFiState(struct state *oldstate, struct state *state) {
-    if (WiFi.status() == oldstate->wifi_status &&
+    if (WiFi.status() == oldstate->wifi_status)
+        return;
+
+    state->wifi_status = WiFi.status();
+    Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
+}
+
+void updateWiFiInfo(struct state *oldstate, struct state *state) {
+    if (state->wifi_status == oldstate->wifi_status &&
         state->is_requesting_reset == oldstate->is_requesting_reset &&
         state->is_wifi_activated == oldstate->is_wifi_activated &&
         state->is_config_running == oldstate->is_config_running)
         return;
-
-    state->wifi_status = WiFi.status();
 
     if (state->wifi_status == WL_CONNECTED)
         state->wifi_info = infoWiFiConnected;
@@ -975,8 +981,6 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
 
     if (!state->is_wifi_activated)
         state->wifi_info = infoEmpty;
-
-    Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
 }
 
 void updateTimeState(struct state *oldstate, struct state *state) {
@@ -991,7 +995,6 @@ void updateMQTT(struct state *state) {
     if (mqtt.loop())
         state->is_mqtt_connected = true;
     else {
-        mqtt.disconnect();
         state->is_mqtt_connected = false;
     }
 }

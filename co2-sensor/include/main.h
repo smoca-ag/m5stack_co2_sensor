@@ -171,8 +171,6 @@ void loadStateFile();
 
 void saveStateFile(struct state *oldstate, struct state *state);
 
-void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig);
-
 void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig);
 
 void initWiFi();
@@ -197,7 +195,7 @@ void loadMQTTConfig();
 
 void saveMQTTConfig(struct state *state);
 
-void loadConfigData();
+bool loadConfigData();
 
 void saveConfigData();
 
@@ -242,6 +240,8 @@ void updatePassword(struct state *state);
 void saveStateFile(struct state *oldstate, struct state *state);
 
 void updateWiFiState(struct state *oldstate, struct state *state);
+
+void updateWiFiInfo(struct state *oldstate, struct state *state);
 
 void updateTimeState(struct state *oldstate, struct state *state);
 
