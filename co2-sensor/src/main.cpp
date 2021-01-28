@@ -966,32 +966,27 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
         return;
 
     state->wifi_status = WiFi.status();
+
     Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
 }
 
 void updateWiFiInfo(struct state *oldstate, struct state *state) {
-    if (state->wifi_status == oldstate->wifi_status &&
-        state->is_requesting_reset == oldstate->is_requesting_reset &&
-        state->is_wifi_activated == oldstate->is_wifi_activated &&
-        state->is_config_running == oldstate->is_config_running)
-        return;
-
-    if (state->wifi_status == WL_CONNECTED)
+    if (state->wifi_status != oldstate->wifi_status) {
+        if (state->wifi_status == WL_CONNECTED)
         state->wifi_info = infoWiFiConnected;
-    else if (state->wifi_status == WL_CONNECT_FAILED)
-        state->wifi_info = infoWiFiFailed;
-    else if (state->wifi_status == WL_CONNECTION_LOST)
-        state->wifi_info = infoWiFiLost;
-    else
-        state->wifi_info = infoEmpty;
+        else if (state->wifi_status == WL_CONNECT_FAILED)
+            state->wifi_info = infoWiFiFailed;
+        else if (state->wifi_status == WL_CONNECTION_LOST)
+            state->wifi_info = infoWiFiLost;
+        else
+            state->wifi_info = infoEmpty;
+    }
 
     if (state->is_config_running)
         state->wifi_info = infoConfigPortalCredentials;
 
     if (!state->is_wifi_activated)
         state->wifi_info = infoEmpty;
-
-    Serial.println("Changed Info from: " + (String) oldstate->wifi_info + " to " + (String) state->wifi_info);
 }
 
 void updateTimeState(struct state *oldstate, struct state *state) {
@@ -1309,10 +1304,10 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
         DisbuffBody.drawString(ipInfo, 15, 110);
     } else if (state->wifi_info == infoWiFiLost) {
         DisbuffBody.setTextColor(RED);
-        DisbuffBody.drawString("Connection lost", 80, 90);
+        DisbuffBody.drawString("Connection lost", 70, 90);
     } else if (state->wifi_info == infoWiFiFailed) {
         DisbuffBody.setTextColor(RED);
-        DisbuffBody.drawString("Connection failed", 75, 90);
+        DisbuffBody.drawString("Connection failed", 65, 90);
     }
 
     DisbuffBody.pushSprite(0, 26);
