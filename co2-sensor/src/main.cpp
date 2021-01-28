@@ -115,6 +115,7 @@ void setup() {
 
     loadStateFile();
     loadMQTTConfig();
+    setPassword(&state);
     setDisplayPower(true);
     setTimeFromRtc();
     printTime();
@@ -157,7 +158,6 @@ void loop() {
     updateCo2(&state);
     updateGraph(&oldstate, &state);
     updateLed(&oldstate, &state);
-    updatePassword(&state);
     updateWiFiState(&oldstate, &state);
     updateWiFiInfo(&oldstate, &state);
     updateTimeState(&oldstate, &state);
@@ -570,19 +570,26 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_running) {
         Router_SSID = asyncWifiManager->WiFi_SSID();
         Router_Pass = asyncWifiManager->WiFi_Pass();
+        bool shouldStartWiFiManager = false;
 
-        if (Router_SSID != "" && Router_Pass != "") {
+        if (Router_SSID != "" && Router_Pass.length() >= MIN_AP_PASSWORD_SIZE) {
             Serial.println("Got Self-Stored Credentials");
             wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
         } else if (loadConfigData()) { 
-            Serial.println("Got stored credentials");
-
+            shouldStartWiFiManager = true;
             for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
                 if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
-                    (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE))
+                    (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
+                    
+                    Serial.println("Got stored credentials. SSID: " + (String) WM_config.WiFi_Creds[i].wifi_ssid);
                     wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
+                    shouldStartWiFiManager = false;
+                }   
             }
-        } else {
+        } else 
+            shouldStartWiFiManager = true;
+        
+        if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
             startWiFiManager(state);
         }
@@ -609,7 +616,7 @@ void startWiFiManager(struct state *state) {
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager) {
     state.is_config_running = true;
-    Serial.println("Config Portal started sucessfully");
+    Serial.println("Config Portal started sucessfully. PW: " + (String) state.password);
 }
 
 // This gets called when custom parameters have been set 
@@ -944,9 +951,9 @@ void updateCo2(struct state *state) {
     }
 }
 
-void updatePassword(struct state *state) {
-    if ((String) state->password == "") {
-        String password = randomPassword(8);
+void setPassword(struct state *state) {
+    if ((String) state->password == "" || String(state->password).length() < CP_PASSWORD_GENERATION_LEN) {
+        String password = randomPassword(CP_PASSWORD_GENERATION_LEN);
         strncpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
         Serial.println(state->password);
     }
@@ -981,6 +988,8 @@ void updateWiFiInfo(struct state *oldstate, struct state *state) {
 
     if (!state->is_wifi_activated)
         state->wifi_info = infoEmpty;
+
+    Serial.println("Changed Info from: " + (String) oldstate->wifi_info + " to " + (String) state->wifi_info);
 }
 
 void updateTimeState(struct state *oldstate, struct state *state) {

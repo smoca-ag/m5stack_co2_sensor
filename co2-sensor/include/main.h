@@ -47,6 +47,7 @@
 #define USE_DHCP_IP true
 #define USE_CONFIGURABLE_DNS true
 
+#define CP_PASSWORD_GENERATION_LEN 8
 #define MAX_CP_PASSWORD_LEN 16
 
 #define TIME_SYNC_HOUR 2
@@ -235,7 +236,7 @@ void updateGraph(struct state *oldstate, struct state *state);
 
 void updateLed(struct state *oldstate, struct state *state);
 
-void updatePassword(struct state *state);
+void setPassword(struct state *state);
 
 void saveStateFile(struct state *oldstate, struct state *state);
 
