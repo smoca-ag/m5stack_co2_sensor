@@ -599,6 +599,8 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         Router_SSID = "";
         Router_Pass = "";
 
+        SPIFFS.remove(CONFIG_FILENAME);
+
         asyncWifiManager->resetSettings();
         WiFi.disconnect(false, true);
         state->is_requesting_reset = false;
