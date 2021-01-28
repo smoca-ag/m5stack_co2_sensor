@@ -36,7 +36,7 @@
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
 
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 3
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
 
 #define GRAPH_UNITS 240
 
@@ -47,6 +47,7 @@
 #define USE_DHCP_IP true
 #define USE_CONFIGURABLE_DNS true
 
+#define CP_PASSWORD_GENERATION_LEN 8
 #define MAX_CP_PASSWORD_LEN 16
 
 #define TIME_SYNC_HOUR 2
@@ -137,6 +138,7 @@ struct state {
     int calibration_value = 400;
     enum info cal_info = infoEmpty;
     bool is_wifi_activated = false;
+    bool is_config_running = false;
     bool is_requesting_reset = false;
     wl_status_t wifi_status = WL_DISCONNECTED;
     enum info wifi_info = infoEmpty;
@@ -170,8 +172,6 @@ void loadStateFile();
 
 void saveStateFile(struct state *oldstate, struct state *state);
 
-void initAPIPConfigStruct(WiFi_AP_IPConfig &in_WM_AP_IPconfig);
-
 void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig);
 
 void initWiFi();
@@ -180,9 +180,11 @@ void initSD();
 
 void initAirSensor();
 
+void initAsyncWifiManager(struct state *state);
+
 void checkIntervals(struct state *state);
 
-void checkWiFi();
+void connectWiFi(struct state *state);
 
 uint8_t connectMultiWiFi();
 
@@ -194,7 +196,7 @@ void loadMQTTConfig();
 
 void saveMQTTConfig(struct state *state);
 
-void loadConfigData();
+bool loadConfigData();
 
 void saveConfigData();
 
@@ -202,17 +204,15 @@ void handleNavigation(struct state *state);
 
 void handleWiFi(struct state *oldstate, struct state *state);
 
-void startWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *oldstate, struct state *state);
+void startWiFiManager(struct state *state);
 
-void resetWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager, struct state *state);
+void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager);
 
 void configPortalCallback();
 
-void saveConfigPortalCredentials(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
+void saveConfigPortalCredentials();
 
 bool areRouterCredentialsValid();
-
-void setupWiFiManager(ESPAsync_WiFiManager *ESPAsync_WiFiManager);
 
 void publishMQTT(struct state *state);
 
@@ -236,11 +236,13 @@ void updateGraph(struct state *oldstate, struct state *state);
 
 void updateLed(struct state *oldstate, struct state *state);
 
-void updatePassword(struct state *state);
+void setPassword(struct state *state);
 
 void saveStateFile(struct state *oldstate, struct state *state);
 
 void updateWiFiState(struct state *oldstate, struct state *state);
+
+void updateWiFiInfo(struct state *oldstate, struct state *state);
 
 void updateTimeState(struct state *oldstate, struct state *state);
 
