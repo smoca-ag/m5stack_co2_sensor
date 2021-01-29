@@ -8,7 +8,7 @@ CO₂ levels measured indoors can be used as an indicator of air quality.
 
 Outdoor air has a CO₂ ppm level of 400 ppm. Humans exhale air with 40000 ppm. You can calculate the percentage of exhaust air you are breathing by dividing measured CO₂ level above outdoor by the human exhaust level. Used air might contain aerosols which might contain the corona virus.
 
-High indoor CO2 levels also have an impact on the cognitive performance of humans.
+High indoor CO₂ levels also have an impact on the cognitive performance of humans.
 
 Smoca AG decided to build this easy to reproduce CO₂ measuring device to help slow the spread of the corona virus in offices.
 It supports its users in deciding when ventilating the room begin monitored is advisable. It also raises awareness for the correlation between CO₂ level and air quality.
@@ -52,7 +52,7 @@ To initialise the device do the following:
 
 #### Calibration
 
-The SCD30 can be calibrated manually or automatically. For manual calibration, the device must be placed outdoors for at least five minutes. Then the calibration can be adjusted. Fresh air has a CO2 concentration of about 400 ppm. To use automatic calibration, the device must have access to fresh air for at least one hour a day.
+The SCD30 can be calibrated manually or automatically. For manual calibration, the device must be placed outdoors for at least five minutes. Then the calibration can be adjusted. Fresh air has a CO₂ concentration of about 400 ppm. To use automatic calibration, the device must have access to fresh air for at least one hour a day.
 
 #### WiFi
 
@@ -71,6 +71,7 @@ To keep time and firmware up to date the device synchronizes with servers each n
 #### Firmware updates
 
 Is a new firmware available, it can manually be update via WiFi.
+
 ## Usage
 
 **Disclaimer This is not a safety device. Always follow the local regulations regarding corona safety. No warranty is provided**
