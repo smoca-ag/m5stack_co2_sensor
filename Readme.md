@@ -64,9 +64,9 @@ To use MQTT, synchronization and update functionality the device must have inter
 Topics are able to have subtopics: `office2/meeting_room1/co2 1100`.  
 The following categories are provided by the device: `/co2`, `/humidity`, `/temperature`.
 
-#### Synchronization
+#### Time synchronization
 
-To keep time and firmware up to date the device synchronizes with servers each night between two and three o'clock.
+To keep time up to date the device synchronizes with a time server each night between two and three o'clock.
 
 #### Firmware updates
 
