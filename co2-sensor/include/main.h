@@ -204,8 +204,6 @@ void handleNavigation(struct state *state);
 
 void handleWiFi(struct state *oldstate, struct state *state);
 
-void startWiFiManager(struct state *state);
-
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager);
 
 void configPortalCallback();
