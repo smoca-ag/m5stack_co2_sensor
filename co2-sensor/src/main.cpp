@@ -1003,7 +1003,6 @@ void updateTimeState(struct state *oldstate, struct state *state) {
 }
 
 void updateMQTT(struct state *state) {
-    return;
     if (mqtt.loop())
         state->is_mqtt_connected = true;
     else {
