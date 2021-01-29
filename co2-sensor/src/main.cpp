@@ -171,14 +171,13 @@ void loop() {
     checkIntervals(&state);
     handleFirmware(&oldstate, &state);
     writeSsd(&state);
-    asyncWifiManager->loop();
 
     cycle++;
     unsigned long duration = millis() - start;
     if (duration < frame_duration_ms) {
         delay(frame_duration_ms - duration);
     } else {
-        //Serial.println("we are to slow:" + String(duration));
+        Serial.println("we are to slow:" + String(duration));
     }
 }
 
@@ -270,7 +269,8 @@ void initAsyncWifiManager(struct state *state) {
     mqttServer = new ESPAsync_WMParameter(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
     mqttPort = new ESPAsync_WMParameter(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
     mqttTopic = new ESPAsync_WMParameter(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
-    mqttDevice = new ESPAsync_WMParameter(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice, MQTT_DEVICENAME_LEN - 1);
+    mqttDevice = new ESPAsync_WMParameter(MQTT_DEVICENAME_Label, "MQTT unique device name", state->mqttDevice,
+                                          MQTT_DEVICENAME_LEN - 1);
     mqttUser = new ESPAsync_WMParameter(MQTT_USERNAME_Label, "MQTT Username", state->mqttUser, MQTT_USERNAME_LEN - 1);
     mqttPassword = new ESPAsync_WMParameter(MQTT_KEY_Label, "MQTT Password", state->mqttPassword, MQTT_KEY_LEN - 1);
 
@@ -358,18 +358,18 @@ void checkIntervals(struct state *state) {
     }
 
     if (current_millis > checkmqtt_connection_timeout || checkmqtt_connection_timeout == 0) {
-        if (!mqtt.connected() && state->wifi_status == WL_CONNECTED &&
+        if (state->wifi_status == WL_CONNECTED && !mqtt.connected() &&
             (String) state->mqttServer != "" && (String) state->mqttPort != "") {
             setMQTTServer(state);
             MQTTConnect(state);
-        } else if (mqtt.connected() && state->wifi_status != WL_CONNECTED)
+        } else if (state->wifi_status != WL_CONNECTED && mqtt.connected())
             mqtt.disconnect();
-    
-        checkmqtt_connection_timeout = current_millis + MQTT_CHECK_CONNECTION; 
+
+        checkmqtt_connection_timeout = current_millis + MQTT_CHECK_CONNECTION;
     }
 
     if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
-        if (state->wifi_status == WL_CONNECTED && (String) state->mqttTopic != "" && mqtt.connected()) 
+        if (state->wifi_status == WL_CONNECTED && (String) state->mqttTopic != "" && mqtt.connected())
             publishMQTT(state);
 
         checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
@@ -394,7 +394,8 @@ uint8_t connectMultiWiFi() {
     for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
         if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
             strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)
-            LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw);
+            LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "),
+                      WM_config.WiFi_Creds[i].wifi_pw);
     }
 
     LOGERROR(F("Connecting MultiWifi..."));
@@ -410,8 +411,7 @@ uint8_t connectMultiWiFi() {
         LOGERROR0(F("WiFi connected. "));
         LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
         LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP());
-    } else
-        LOGERROR3(F("WiFi not connected."), " ", "Status: ", (String) status);
+    } else LOGERROR3(F("WiFi not connected."), " ", "Status: ", (String) status);
 
     return status;
 }
@@ -522,8 +522,8 @@ void saveConfigData() {
     LOGERROR(F("SaveWiFiCfgFile "));
 
     if (file) {
-        file.write((uint8_t * ) & WM_config, sizeof(WM_config));
-        file.write((uint8_t * ) & WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
+        file.write((uint8_t *) &WM_config, sizeof(WM_config));
+        file.write((uint8_t *) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
         file.close();
         LOGERROR(F("OK"));
     } else {
@@ -564,6 +564,10 @@ void handleNavigation(struct state *state) {
 }
 
 void handleWiFi(struct state *oldstate, struct state *state) {
+    if (state->is_wifi_activated) {
+        asyncWifiManager->loop();
+    }
+
     if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
         WiFi.disconnect(true, false);
 
@@ -575,20 +579,20 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         if (Router_SSID != "" && Router_Pass.length() >= MIN_AP_PASSWORD_SIZE) {
             Serial.println("Got Self-Stored Credentials");
             wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
-        } else if (loadConfigData()) { 
+        } else if (loadConfigData()) {
             shouldStartWiFiManager = true;
             for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
                 if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
                     (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
-                    
+
                     Serial.println("Got stored credentials. SSID: " + (String) WM_config.WiFi_Creds[i].wifi_ssid);
                     wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
                     shouldStartWiFiManager = false;
-                }   
+                }
             }
-        } else 
+        } else
             shouldStartWiFiManager = true;
-        
+
         if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
             startWiFiManager(state);
@@ -658,7 +662,8 @@ void saveConfigPortalCredentials() {
 
             if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
                 strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) {
-                LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "), WM_config.WiFi_Creds[i].wifi_pw);
+                LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "),
+                          WM_config.WiFi_Creds[i].wifi_pw);
                 wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
             }
         }
@@ -804,8 +809,8 @@ bool fetchRemoteVersion(struct state *state) {
 }
 
 void updateTouch(struct state *state) {
-    switch(state->menu_mode) {
-        case menuModeGraphs: 
+    switch (state->menu_mode) {
+        case menuModeGraphs:
             if (batteryButton.wasPressed())
                 state->graph_mode = graphModeBatteryMah;
             if (co2Button.wasPressed())
@@ -829,7 +834,7 @@ void updateTouch(struct state *state) {
                 state->menu_mode = menuModeCalibrationAlert;
             break;
 
-        case menuModeCalibrationAlert: 
+        case menuModeCalibrationAlert:
             if (submitCalibrationButton.wasPressed()) {
                 airSensor.setForcedRecalibrationFactor(state->calibration_value);
                 state->menu_mode = menuModeCalibrationSettings;
@@ -856,13 +861,13 @@ void updateTouch(struct state *state) {
             if (syncTimeButton.wasPressed())
                 state->is_requesting_update = true;
             break;
-        
-        default: 
+
+        default:
             break;
     }
- 
+
     if (M5.BtnA.wasPressed()) {
-        if (state->menu_mode == menuModeGraphs) {     
+        if (state->menu_mode == menuModeGraphs) {
             setDisplayPower(state->display_sleep);
             state->display_sleep = !state->display_sleep;
         } else
@@ -973,7 +978,7 @@ void updateWiFiState(struct state *oldstate, struct state *state) {
 void updateWiFiInfo(struct state *oldstate, struct state *state) {
     if (state->wifi_status != oldstate->wifi_status) {
         if (state->wifi_status == WL_CONNECTED)
-        state->wifi_info = infoWiFiConnected;
+            state->wifi_info = infoWiFiConnected;
         else if (state->wifi_status == WL_CONNECT_FAILED)
             state->wifi_info = infoWiFiFailed;
         else if (state->wifi_status == WL_CONNECTION_LOST)
@@ -1324,9 +1329,9 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
 void drawMQTTSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->is_mqtt_connected == oldstate->is_mqtt_connected &&
-        state->mqttServer == oldstate->mqttServer &&
-        state->mqttPort == oldstate->mqttPort &&
-        state->mqttDevice == oldstate->mqttDevice &&
+        strncmp(state->mqttServer, oldstate->mqttServer, sizeof(state->mqttServer) - 1) == 0 &&
+        strncmp(state->mqttPort, oldstate->mqttPort, sizeof(state->mqttPort) -1) == 0 &&
+        strncmp(state->mqttDevice, oldstate->mqttDevice, sizeof(state->mqttDevice) - 1) == 0 &&
         state->menu_mode == oldstate->menu_mode)
         return;
 
@@ -1493,6 +1498,9 @@ void writeSsd(struct state *state) {
     if (((cycle + 3) % (2 * target_fps)) != 0) {
         return;
     }
+    if (SD.cardType() == CARD_NONE) {
+        return;
+    }
 
     String dateTime = String(
             state->current_time.tm_year + 1900) + "-" +
@@ -1553,22 +1561,24 @@ void syncData(struct state *state) {
         return;
 
     if (state->force_sync) {
-        if (fetchRemoteVersion(state) && setRtc(state))
+        if (fetchRemoteVersion(state) && setRtc(state)) {
+            setTimeFromRtc();
             state->time_info = infoTimeSyncSuccess;
-        else 
+        }
+        else
             state->time_info = infoTimeSyncFailed;
         state->force_sync = false;
     } else if (state->is_sync_needed) {
-         if (fetchRemoteVersion(state) && setRtc(state)) {
+        if (fetchRemoteVersion(state) && setRtc(state)) {
+            setTimeFromRtc();
             state->time_info = infoTimeSyncSuccess;
-            getLocalTime(&(state->current_time));
             state->next_time_sync = state->current_time;
             state->next_time_sync.tm_mday++;
             state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
             state->next_time_sync.tm_min = TIME_SYNC_MIN;
-         } else 
+        } else
             state->time_info = infoTimeSyncFailed;
-        
+
         state->is_sync_needed = false;
     }
 }
