@@ -8,7 +8,7 @@ CO₂ levels measured indoors can be used as an indicator of air quality.
 
 Outdoor air has a CO₂ ppm level of 400 ppm. Humans exhale air with 40000 ppm. You can calculate the percentage of exhaust air you are breathing by dividing measured CO₂ level above outdoor by the human exhaust level. Used air might contain aerosols which might contain the corona virus.
 
-High indoor CO2 levels also have an impact on the cognitive performance of humans.
+High indoor CO₂ levels also have an impact on the cognitive performance of humans.
 
 Smoca AG decided to build this easy to reproduce CO₂ measuring device to help slow the spread of the corona virus in offices.
 It supports its users in deciding when ventilating the room begin monitored is advisable. It also raises awareness for the correlation between CO₂ level and air quality.
@@ -29,17 +29,16 @@ Note: The optional battery increases the battery operation time from 6 to 10 hou
 
 ### Building
 
-1. Power the Core2 module. A factory test application should be loaded. Test the device.
-2. Remove the bottom of the Core2 module. Keep the battery there or replace it with the optional bigger one.
-   ![Front](pictures/front.jpg "Front")
-3. Remove the PCB from the proto module.
-4. Connect the SCD30 module to the proto module. We used pin headers. Connect VDD with 3V3, GND with GND, TX/SCL with pin 5 and RX/SDA with pin 2. The other pins don't need to be connected to the proto module.
-   ![scd30](pictures/scd30.png "scd30")
-   ![solder](pictures/solder.jpg "solder")
-5. Screw the proto module to the PLC Base
-6. Screw the PLC Base to the Core2 module
-   ![together](pictures/together.jpg "connected")
-7. HW Done, load the software
+|Description | Image
+|----------- | -----------
+|1. Power the Core2 module. A factory test application should be loaded. Test the device. |
+|2. Remove the bottom of the Core2 module. Keep the battery there or replace it with the optional bigger one. | ![Front](pictures/front.jpg "Front")
+|3. Remove the PCB from the proto module. |
+|4. Connect the SCD30 module to the proto module. We used pin headers. | ![solder](pictures/solder.jpg "solder")
+|5. Connect VDD with 3V3, GND with GND, TX/SCL with pin 5 and RX/SDA with pin 2. The other pins don't need to be connected to the proto module. | ![scd30](pictures/scd30.png "scd30")
+|5. Screw the proto module to the PLC Base |
+|6. Screw the PLC Base to the Core2 module | ![together](pictures/together.jpg "connected")
+|7. HW Done, load the software |
 
 ## Software
 
@@ -48,6 +47,30 @@ To initialise the device do the following:
 1. Install [Platformio IDE](https://platformio.org/platformio-ide) or [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation.html) to use another IDE
 2. Open the `co2-sensor` project folder
 3. Flash the `main.cpp` script to your M5 Stack Core2 with `pio run -t upload --upload-port {your_device}`. You can see a list of your devices with `pio device list`. Dependencies are installed automatically.
+
+## Features
+
+#### Calibration
+
+The SCD30 can be calibrated manually or automatically. For manual calibration, the device must be placed outdoors for at least five minutes. Then the calibration can be adjusted. Fresh air has a CO₂ concentration of about 400 ppm. To use automatic calibration, the device must have access to fresh air for at least one hour a day.
+
+#### WiFi
+
+To use MQTT, synchronization and update functionality the device must have internet connection. To add WiFi credentials the device opens an access point with a web interface (Default IP is 192.168.4.1). 
+
+#### Data sharing via MQTT
+
+[MQTT](https://mqtt.org/) can be used to send the sensors data to a custom MQTT broker. Server, Port, Topic, Device name, Username and Password can also be configured in the web interface. Each minute the device sends its data in the following format: `{TOPIC}/{CATEGORY} {VALUE}`. Here an example: `sensor/co2 650`.  
+Topics are able to have subtopics: `office2/meeting_room1/co2 1100`.  
+The following categories are provided by the device: `/co2`, `/humidity`, `/temperature`.
+
+#### Time synchronization
+
+To keep time up to date the device synchronizes with a time server each night between two and three o'clock.
+
+#### Firmware updates
+
+Is a new firmware available, it can manually be update via WiFi.
 
 ## Usage
 
