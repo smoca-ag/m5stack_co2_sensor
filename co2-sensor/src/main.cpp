@@ -640,6 +640,7 @@ void configPortalCallback() {
     strncpy(state.mqttUser, mqttUser->getValue(), MQTT_USERNAME_LEN);
     strncpy(state.mqttPassword, mqttPassword->getValue(), MQTT_KEY_LEN);
 
+    saveMQTTConfig(&state);
     setMQTTServer(&state);
 }
 
@@ -719,13 +720,11 @@ bool MQTTConnect(struct state *state) {
     if ((String) state->mqttUser != "" && (String) state->mqttPassword != "") {
         if (mqtt.connect(clientID, state->mqttUser, state->mqttPassword)) {
             Serial.println(F("MQTT connection successful!"));
-            saveMQTTConfig(state);
             return true;
         }
     } else {
         if (mqtt.connect(clientID)) {
             Serial.println(F("MQTT connection successful!"));
-            saveMQTTConfig(state);
             return true;
         }
     }
