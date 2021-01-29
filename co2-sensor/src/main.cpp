@@ -1561,15 +1561,17 @@ void syncData(struct state *state) {
         return;
 
     if (state->force_sync) {
-        if (fetchRemoteVersion(state) && setRtc(state))
+        if (fetchRemoteVersion(state) && setRtc(state)) {
+            setTimeFromRtc();
             state->time_info = infoTimeSyncSuccess;
+        }
         else
             state->time_info = infoTimeSyncFailed;
         state->force_sync = false;
     } else if (state->is_sync_needed) {
         if (fetchRemoteVersion(state) && setRtc(state)) {
+            setTimeFromRtc();
             state->time_info = infoTimeSyncSuccess;
-            getLocalTime(&(state->current_time));
             state->next_time_sync = state->current_time;
             state->next_time_sync.tm_mday++;
             state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
