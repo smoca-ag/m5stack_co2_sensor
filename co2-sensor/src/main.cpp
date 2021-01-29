@@ -1330,9 +1330,9 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
 void drawMQTTSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->is_mqtt_connected == oldstate->is_mqtt_connected &&
-        state->mqttServer == oldstate->mqttServer &&
-        state->mqttPort == oldstate->mqttPort &&
-        state->mqttDevice == oldstate->mqttDevice &&
+        strncmp(state->mqttServer, oldstate->mqttServer, sizeof(state->mqttServer) - 1) == 0 &&
+        strncmp(state->mqttPort, oldstate->mqttPort, sizeof(state->mqttPort) -1) == 0 &&
+        strncmp(state->mqttDevice, oldstate->mqttDevice, sizeof(state->mqttDevice) - 1) == 0 &&
         state->menu_mode == oldstate->menu_mode)
         return;
 
