@@ -56,7 +56,7 @@ The SCD30 can be calibrated manually or automatically. For manual calibration, t
 
 #### WiFi
 
-To use MQTT, synchronization and update functionality the device must have internet connection. To add WiFi credentials the device opens an access point with a web interface (Standard IP is 192.168.4.1). 
+To use MQTT, synchronization and update functionality the device must have internet connection. To add WiFi credentials the device opens an access point with a web interface (Default IP is 192.168.4.1). 
 
 #### Data sharing via MQTT
 
