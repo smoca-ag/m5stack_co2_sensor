@@ -456,7 +456,8 @@ void loadMQTTConfig() {
         Serial.print(F("deserializeJson() failed: "));
         Serial.println(error.f_str());
         return;
-    }
+    } else
+        serializeJsonPretty(json, Serial);
 
     if (json.containsKey(MQTT_SERVER_Label))
         strncpy(state.mqttServer, json[MQTT_SERVER_Label], MQTT_SERVER_LEN);
@@ -495,6 +496,8 @@ void saveMQTTConfig(struct state *state) {
     }
 
     serializeJson(json, file);
+    Serial.println("Saved MQTT Config:");
+    serializeJsonPretty(json, Serial);
     file.close();
 }
 
@@ -617,7 +620,6 @@ void handleWiFi(struct state *oldstate, struct state *state) {
 void startWiFiManager(struct state *state) {
     asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
     saveConfigPortalCredentials();
-    saveMQTTConfig(state);
 }
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager) {
@@ -717,11 +719,13 @@ bool MQTTConnect(struct state *state) {
     if ((String) state->mqttUser != "" && (String) state->mqttPassword != "") {
         if (mqtt.connect(clientID, state->mqttUser, state->mqttPassword)) {
             Serial.println(F("MQTT connection successful!"));
+            saveMQTTConfig(state);
             return true;
         }
     } else {
         if (mqtt.connect(clientID)) {
             Serial.println(F("MQTT connection successful!"));
+            saveMQTTConfig(state);
             return true;
         }
     }
@@ -729,7 +733,6 @@ bool MQTTConnect(struct state *state) {
     Serial.print("MQTT connection failed: ");
     Serial.println(mqtt.state());
 
-    Serial.println("Could not connect to MQTT");
     return false;
 }
 
