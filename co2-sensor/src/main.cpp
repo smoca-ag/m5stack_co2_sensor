@@ -638,6 +638,15 @@ void configPortalCallback() {
 
     saveMQTTConfig(&state);
     setMQTTServer(&state);
+
+    if (state.mqttDevice != mqttDevice->getValue()) {
+        mqtt.disconnect();
+
+        if ((String) state.mqttUser != "" && (String) state.mqttPassword != "")
+            mqtt.connect(state.mqttDevice, state.mqttUser, state.mqttPassword);
+        else 
+            mqtt.connect(state.mqttDevice);
+    }
 }
 
 void saveConfigPortalCredentials() {
