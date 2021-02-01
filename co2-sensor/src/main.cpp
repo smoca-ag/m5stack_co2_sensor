@@ -163,13 +163,14 @@ void loop() {
     updateTimeState(&oldstate, &state);
     updateMQTT(&state);
 
-    syncData(&state);
     saveStateFile(&oldstate, &state);
+
     drawScreen(&oldstate, &state);
 
     handleWiFi(&oldstate, &state);
-    checkIntervals(&state);
+    syncData(&state);
     handleFirmware(&oldstate, &state);
+    checkIntervals(&state);
     writeSsd(&state);
 
     cycle++;
@@ -567,9 +568,8 @@ void handleNavigation(struct state *state) {
 }
 
 void handleWiFi(struct state *oldstate, struct state *state) {
-    if (state->is_wifi_activated) {
+    if (state->is_wifi_activated)
         asyncWifiManager->loop();
-    }
 
     if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
         WiFi.disconnect(true, false);
@@ -577,13 +577,13 @@ void handleWiFi(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_running) {
         Router_SSID = asyncWifiManager->WiFi_SSID();
         Router_Pass = asyncWifiManager->WiFi_Pass();
-        bool shouldStartWiFiManager = false;
+        bool shouldStartWiFiManager = true;
 
         if (Router_SSID != "" && Router_Pass.length() >= MIN_AP_PASSWORD_SIZE) {
             Serial.println("Got Self-Stored Credentials");
             wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
+            shouldStartWiFiManager = false;
         } else if (loadConfigData()) {
-            shouldStartWiFiManager = true;
             for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
                 if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
                     (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
@@ -593,12 +593,11 @@ void handleWiFi(struct state *oldstate, struct state *state) {
                     shouldStartWiFiManager = false;
                 }
             }
-        } else
-            shouldStartWiFiManager = true;
+        }
 
         if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
-            startWiFiManager(state);
+            asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
         }
     }
 
@@ -613,13 +612,8 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         state->is_requesting_reset = false;
 
         Serial.println("Starting Configuration Portal for reset.");
-        startWiFiManager(state);
+        asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
     }
-}
-
-void startWiFiManager(struct state *state) {
-    asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
-    saveConfigPortalCredentials();
 }
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager) {
@@ -633,6 +627,8 @@ void configPortalCallback() {
     Serial.println("Config Portal closed");
     state.is_config_running = false;
 
+    saveConfigPortalCredentials();
+
     strncpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
     strncpy(state.mqttPort, mqttPort->getValue(), MQTT_PORT_LEN);
     strncpy(state.mqttTopic, mqttTopic->getValue(), MQTT_TOPIC_LEN);
@@ -642,6 +638,15 @@ void configPortalCallback() {
 
     saveMQTTConfig(&state);
     setMQTTServer(&state);
+
+    if (state.mqttDevice != mqttDevice->getValue()) {
+        mqtt.disconnect();
+
+        if ((String) state.mqttUser != "" && (String) state.mqttPassword != "")
+            mqtt.connect(state.mqttDevice, state.mqttUser, state.mqttPassword);
+        else 
+            mqtt.connect(state.mqttDevice);
+    }
 }
 
 void saveConfigPortalCredentials() {
@@ -662,13 +667,6 @@ void saveConfigPortalCredentials() {
                 strcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str());
             else
                 strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
-
-            if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
-                strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE) {
-                LOGERROR3(F("* Add SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "),
-                          WM_config.WiFi_Creds[i].wifi_pw);
-                wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
-            }
         }
 
         saveConfigData();
