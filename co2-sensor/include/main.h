@@ -30,13 +30,13 @@
 
 #include <smoca_logo.h>
 
-#define VERSION_NUMBER "1.1.2"
+#define VERSION_NUMBER "1.1.3"
 #define VERSION_NUMBER_LEN 8
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
 
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 1
 
 #define GRAPH_UNITS 240
 
@@ -119,6 +119,14 @@ enum info {
     infoEmpty
 };
 
+enum connectionState {
+    WiFi_down_MQTT_down,
+    WiFi_starting_MQTT_down,
+    WiFi_up_MQTT_down,
+    WiFi_up_MQTT_starting,
+    WiFi_up_MQTT_up
+};
+
 struct state {
     int co2_ppm;
     int temperature_celsius;
@@ -157,6 +165,7 @@ struct state {
     char mqttTopic[MQTT_TOPIC_LEN];
     char mqttUser[MQTT_USERNAME_LEN];
     char mqttPassword[MQTT_KEY_LEN];
+    enum connectionState connectionState = WiFi_down_MQTT_down;
 };
 
 struct graph {
