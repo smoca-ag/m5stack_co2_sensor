@@ -1095,7 +1095,7 @@ void drawHeader(struct state *oldstate, struct state *state) {
     strftime(strftime_buf, sizeof(strftime_buf) - 1, "%c", &(state->current_time));
     DisbuffHeader.drawString(String(strftime_buf), 0, 1);
     DisbuffHeader.setTextDatum(TR_DATUM);
-    DisbuffHeader.drawString(String(state->battery_percent) + "%" + (state->in_ac ? "+" : "-"), 320, 0);
+    DisbuffHeader.drawString(String(state->battery_percent) + "%" + (state->in_ac ? "+" : "-"), 320, 1);
     DisbuffHeader.setTextDatum(TL_DATUM);
     DisbuffHeader.drawLine(0, 25, 320, 25, WHITE);
     DisbuffHeader.pushSprite(0, 0);
@@ -1122,8 +1122,10 @@ void drawValues(struct state *oldstate, struct state *state) {
     String humidity = String(state->humidity_percent / 10.0, 1) + "%";
 
     midLeftButton.setLabel(temperature.c_str());
+    midLeftButton.setFreeFont(&FreeMonoBold18pt7b);
     midLeftButton.draw();
     midRightButton.setLabel(humidity.c_str());
+    midRightButton.setFreeFont(&FreeMonoBold18pt7b);
     midRightButton.draw();
     batteryButton.draw();
     co2Button.draw();
