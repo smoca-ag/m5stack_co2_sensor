@@ -121,6 +121,7 @@ enum info {
 
 enum connectionState {
     WiFi_down_MQTT_down,
+    WiFi_scan_MQTT_down,
     WiFi_starting_MQTT_down,
     WiFi_up_MQTT_down,
     WiFi_up_MQTT_starting,
@@ -195,8 +196,6 @@ void checkIntervals(struct state *oldstate, struct state *state);
 
 void connectWiFi(struct state *state);
 
-uint8_t connectMultiWiFi();
-
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig);
@@ -220,8 +219,6 @@ void configPortalCallback();
 void saveConfigPortalCredentials();
 
 bool areRouterCredentialsValid();
-
-void publishMQTT(struct state *state);
 
 void setMQTTServer(struct state *state);
 
