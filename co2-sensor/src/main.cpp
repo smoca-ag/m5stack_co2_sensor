@@ -453,7 +453,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     }
                 }
 
-                if (connectableAPlist.empty()) {
+                if (connectableAPlist.empty() || nextAPOffset == connectableAPlist.size()) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
                     state->connectionState = WiFi_down_MQTT_down;
                     break;
