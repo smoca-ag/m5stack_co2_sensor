@@ -191,7 +191,7 @@ void initAirSensor();
 
 void initAsyncWifiManager(struct state *state);
 
-void checkIntervals(struct state *state);
+void checkIntervals(struct state *oldstate, struct state *state);
 
 void connectWiFi(struct state *state);
 
@@ -246,8 +246,6 @@ void updateLed(struct state *oldstate, struct state *state);
 void setPassword(struct state *state);
 
 void saveStateFile(struct state *oldstate, struct state *state);
-
-void updateWiFiState(struct state *oldstate, struct state *state);
 
 void updateWiFiInfo(struct state *oldstate, struct state *state);
 

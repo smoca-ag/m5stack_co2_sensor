@@ -157,19 +157,19 @@ void loop() {
     updateCo2(&state);
     updateGraph(&oldstate, &state);
     updateLed(&oldstate, &state);
-    updateWiFiState(&oldstate, &state);
     updateWiFiInfo(&oldstate, &state);
     updateTimeState(&oldstate, &state);
     updateMQTT(&state);
 
     saveStateFile(&oldstate, &state);
 
+    checkIntervals(&oldstate, &state);
+
     drawScreen(&oldstate, &state);
 
     handleWiFi(&oldstate, &state);
     syncData(&state);
     handleFirmware(&oldstate, &state);
-    checkIntervals(&state);
     writeSsd(&state);
 
     cycle++;
@@ -341,84 +341,89 @@ void initAirSensor() {
     airSensor.setAltitudeCompensation(440);
 }
 
-void checkIntervals(struct state *state) {
-    if (state->is_config_running)
-        return;
+void checkIntervals(struct state *oldstate, struct state *state) {
 
+    if (WiFi.status() != oldstate->wifi_status) {
+        state->wifi_status = WiFi.status();
+        Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
+    }
+    
+    if (!state->is_config_running) {
 #define WIFI_INTERVAL 5000L
 #define MQTT_INTERVAL 5000L
 #define MQTT_PUBLISH_INTERVAL 60000L
 
-    static ulong wifiTimeout = 0;
-    static ulong mqttTimeout = 0;
-    static ulong mqttPublishTimeout = 0;
-    static ulong currentMillis;
-    currentMillis = millis();
+        static ulong wifiTimeout = 0;
+        static ulong mqttTimeout = 0;
+        static ulong nextMqttPublishTime = 0;
+        static ulong currentMillis;
+        currentMillis = millis();
 
-    switch (state->connectionState) {
-        case WiFi_down_MQTT_down:
-            if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated) {
-                connectMultiWiFi();
-                state->connectionState = WiFi_starting_MQTT_down;
-            }
-            break;
-        
-        case WiFi_starting_MQTT_down:
-            if ((currentMillis > wifiTimeout || wifiTimeout == 0)) {
-                if (state->wifi_status == WL_CONNECTED)
-                    state->connectionState = WiFi_up_MQTT_down;
-                else {
-                    Serial.println("WiFi not connected");
-                    WiFi.disconnect(false, false);
-                    state->connectionState = WiFi_down_MQTT_down;
+        switch (state->connectionState) {
+            case WiFi_down_MQTT_down:
+                if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated) {
+                    connectMultiWiFi();
+                    state->connectionState = WiFi_starting_MQTT_down;
                 }
-
-                wifiTimeout = currentMillis + WIFI_INTERVAL;
-            }
-            break;
-        
-        case WiFi_up_MQTT_down:
-            if (state->wifi_status == WL_CONNECTED) {
-                if ((String) state->mqttServer != "" && (String) state->mqttPort != "") {
-                    setMQTTServer(state);
-                    MQTTConnect(state);
-                    state->connectionState = WiFi_up_MQTT_starting;
-                }
-            } else 
-                state->connectionState = WiFi_down_MQTT_down;
-        
-            break;
-
-        case WiFi_up_MQTT_starting:
-            if (currentMillis > mqttTimeout || mqttTimeout == 0) {
-                if (state->wifi_status == WL_CONNECTED) {
-                    if (mqtt.connected())
-                        state->connectionState = WiFi_up_MQTT_up;
-                    else
+                break;
+            
+            case WiFi_starting_MQTT_down:
+                if ((currentMillis > wifiTimeout || wifiTimeout == 0)) {
+                    if (state->wifi_status == WL_CONNECTED)
                         state->connectionState = WiFi_up_MQTT_down;
-                
-                } else
-                    state->connectionState = WiFi_down_MQTT_down;
-                
-                mqttTimeout = currentMillis + MQTT_INTERVAL;
-            }
-            break;
+                    else {
+                        Serial.println("WiFi not connected");
+                        WiFi.disconnect(false, false);
+                        state->connectionState = WiFi_down_MQTT_down;
+                    }
 
-        case WiFi_up_MQTT_up:
-            if (state->wifi_status != WL_CONNECTED) {
-                mqtt.disconnect();
-                state->connectionState = WiFi_down_MQTT_down;
-            } else if (!mqtt.connected()) {
-                mqtt.disconnect();
-                state->connectionState = WiFi_up_MQTT_down;
-            } else {
-                if (currentMillis > mqttPublishTimeout || mqttPublishTimeout == 0) {
-                    if ((String) state->mqttTopic != "")
-                        publishMQTT(state);
-                    mqttPublishTimeout = currentMillis + MQTT_PUBLISH_INTERVAL;
+                    wifiTimeout = currentMillis + WIFI_INTERVAL;
                 }
-            }
-            break;
+                break;
+            
+            case WiFi_up_MQTT_down:
+                if (state->wifi_status == WL_CONNECTED) {
+                    if ((String) state->mqttServer != "" && (String) state->mqttPort != "") {
+                        setMQTTServer(state);
+                        MQTTConnect(state);
+                        state->connectionState = WiFi_up_MQTT_starting;
+                    }
+                } else 
+                    state->connectionState = WiFi_down_MQTT_down;
+            
+                break;
+
+            case WiFi_up_MQTT_starting:
+                if (currentMillis > mqttTimeout || mqttTimeout == 0) {
+                    if (state->wifi_status == WL_CONNECTED) {
+                        if (mqtt.connected())
+                            state->connectionState = WiFi_up_MQTT_up;
+                        else
+                            state->connectionState = WiFi_up_MQTT_down;
+                    
+                    } else
+                        state->connectionState = WiFi_down_MQTT_down;
+                    
+                    mqttTimeout = currentMillis + MQTT_INTERVAL;
+                }
+                break;
+
+            case WiFi_up_MQTT_up:
+                if (state->wifi_status != WL_CONNECTED) {
+                    mqtt.disconnect();
+                    state->connectionState = WiFi_down_MQTT_down;
+                } else if (!mqtt.connected()) {
+                    mqtt.disconnect();
+                    state->connectionState = WiFi_up_MQTT_down;
+                } else {
+                    if (currentMillis > nextMqttPublishTime || nextMqttPublishTime == 0) {
+                        if ((String) state->mqttTopic != "")
+                            publishMQTT(state);
+                        nextMqttPublishTime = currentMillis + MQTT_PUBLISH_INTERVAL;
+                    }
+                }
+                break;
+        }
     }
 }
 
@@ -740,9 +745,6 @@ void configPortalCallback() {
 
     saveMQTTConfig(&state);
     setMQTTServer(&state);
-
-    if (state.mqttDevice != mqttDevice->getValue())
-        mqtt.disconnect();
 }
 
 void saveConfigPortalCredentials() {
@@ -1060,15 +1062,6 @@ void setPassword(struct state *state) {
         strncpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
         Serial.println(state->password);
     }
-}
-
-void updateWiFiState(struct state *oldstate, struct state *state) {
-    if (WiFi.status() == oldstate->wifi_status)
-        return;
-
-    state->wifi_status = WiFi.status();
-
-    Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
 }
 
 void updateWiFiInfo(struct state *oldstate, struct state *state) {
