@@ -362,20 +362,18 @@ void checkIntervals(struct state *oldstate, struct state *state) {
 
 
         static int8_t scanResult;
-        static int nextAPIndex;
+        static int nextAPOffset;
+        static std::vector<WifiAPlist_t> connectableAPlist;
         std::vector<WifiAPlist_t> APlist;
 
-        if (Router_SSID != "") {
+        if (Router_SSID != "")
             APlist.push_back({ (char *) Router_SSID.c_str(), (char *) Router_Pass.c_str() });
-            Serial.println("Router_SSID: " + Router_SSID + "; Router_Pass: " + Router_Pass);   
-        }
 
         for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
             if ((String) WM_config.WiFi_Creds[i].wifi_ssid == "")
                 break;
 
             APlist.push_back({ WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw });
-            Serial.println("Config SSID" + (String) i + ": " + WM_config.WiFi_Creds[i].wifi_ssid + "; Pass: " + WM_config.WiFi_Creds[i].wifi_pw);
         }
 
         switch (state->connectionState) {
@@ -397,7 +395,8 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     state->connectionState = WiFi_up_MQTT_down;
                 }
                 else if (state->wifi_status != WL_CONNECTED && !mqtt.connected() && currentMillis > nextWiFiScan) {
-                    nextAPIndex = 0;
+                    nextAPOffset = 0;
+                    connectableAPlist.clear();
                     scanResult = WiFi.scanNetworks();
                     nextWiFiConnection = currentMillis + WIFI_CONNECT_INTERVAL;
                     state->connectionState = WiFi_scan_MQTT_down;
@@ -424,12 +423,11 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     break;
                 }
 
-                WifiAPlist_t bestNetwork { NULL, NULL };
                 int bestNetworkDb = INT_MIN;
                 uint8_t bestBSSID[6];
                 int32_t bestChannel = 0;
 
-                // TODO: use nextAPIndex
+                // TODO: use nextAPOffset
                 for (int i = 0; i < scanResult; ++i) {
                     String ssid_scan;
                     int32_t rssi_scan;
@@ -447,7 +445,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                                 if (sec_scan == WIFI_AUTH_OPEN || entry.passphrase) {
                                     bestNetworkDb = rssi_scan;
                                     bestChannel = chan_scan;
-                                    memcpy((void*) &bestNetwork, (void*) &entry, sizeof(bestNetwork));
+                                    connectableAPlist.push_back(entry);
                                     memcpy((void*) &bestBSSID, (void*) BSSID_scan, sizeof(bestBSSID));
                                 }
                             }
@@ -455,18 +453,16 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     }
                 }
 
-                if (!bestNetwork.ssid) {
+                if (connectableAPlist.empty()) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
                     state->connectionState = WiFi_down_MQTT_down;
                     break;
                 }
 
-                Serial.println("Connecting to: " + (String) bestNetwork.ssid);
-                Serial.println("* SSID: " + (String) bestNetwork.ssid);
-                Serial.println("* Pass: " + (String) bestNetwork.passphrase);
-
                 if (currentMillis > nextWiFiConnection) {    
-                    WiFi.begin(bestNetwork.ssid, bestNetwork.passphrase, bestChannel, bestBSSID);
+                    // best connection is on last index
+                    int index = connectableAPlist.size() - 1 - nextAPOffset;
+                    WiFi.begin(connectableAPlist[index].ssid, connectableAPlist[index].passphrase, bestChannel, bestBSSID);
                     nextMqttConnection = currentMillis + MQTT_INTERVAL;
                     state->connectionState = WiFi_starting_MQTT_down;
                 }
@@ -483,7 +479,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                 }
 
                 if (state->wifi_status != WL_CONNECTED) {
-                    nextAPIndex++;
+                    nextAPOffset++;
                     nextWiFiConnection = currentMillis + WIFI_CONNECT_INTERVAL;
                     state->connectionState = WiFi_scan_MQTT_down;
                     break;
