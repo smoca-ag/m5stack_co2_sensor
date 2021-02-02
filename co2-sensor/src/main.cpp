@@ -344,42 +344,29 @@ void initAirSensor() {
 void checkIntervals(struct state *oldstate, struct state *state) {
     if (WiFi.status() != oldstate->wifi_status) {
         state->wifi_status = WiFi.status();
-        Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
+        Serial.println(
+                "WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
     }
-    
+
     if (!state->is_config_running) {
-#define WIFI_SCAN_INTERVAL 5000L
-#define WIFI_CONNECT_INTERVAL 1000L
-#define MQTT_INTERVAL 1000L
-#define MQTT_PUBLISH_INTERVAL 60000L
+
 
         static ulong nextWiFiScan = 0;
+        // TODO: für was bruchts das ?
         static ulong nextWiFiConnection = 0;
         static ulong nextMqttConnection = 0;
         static ulong nextMqttPublish = 0;
         static ulong currentMillis;
+        static auto *triedBssid = new std::set<uint64_t >();
         currentMillis = millis();
 
 
         static int8_t scanResult;
-        static int nextAPOffset;
-        static std::vector<WifiAPlist_t> connectableAPlist;
-        std::vector<WifiAPlist_t> APlist;
-
-        if (Router_SSID != "")
-            APlist.push_back({ (char *) Router_SSID.c_str(), (char *) Router_Pass.c_str() });
-
-        for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-            if ((String) WM_config.WiFi_Creds[i].wifi_ssid == "")
-                break;
-
-            APlist.push_back({ WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw });
-        }
 
         switch (state->connectionState) {
             case WiFi_down_MQTT_down: {
                 if (!state->is_wifi_activated) {
-                    if (state->wifi_status == WL_CONNECTED)
+                    if (WiFi.status() == WL_CONNECTED)
                         WiFi.disconnect(true, false);
 
                     if (mqtt.connected())
@@ -388,24 +375,24 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     break;
                 }
 
-                if (state->wifi_status == WL_CONNECTED && mqtt.connected())
+                if (WiFi.status() == WL_CONNECTED && mqtt.connected()) {
                     state->connectionState = WiFi_up_MQTT_up;
-                else if (state->wifi_status == WL_CONNECTED && !mqtt.connected()) {
+                }
+                else if (WiFi.status() == WL_CONNECTED && !mqtt.connected()) {
                     nextMqttConnection = currentMillis + MQTT_INTERVAL;
                     state->connectionState = WiFi_up_MQTT_down;
-                }
-                else if (state->wifi_status != WL_CONNECTED && !mqtt.connected() && currentMillis > nextWiFiScan) {
-                    nextAPOffset = 0;
-                    connectableAPlist.clear();
+
+                } else if (WiFi.status() != WL_CONNECTED && currentMillis > nextWiFiScan) {
+                    triedBssid->clear();
                     scanResult = WiFi.scanNetworks();
                     nextWiFiConnection = currentMillis + WIFI_CONNECT_INTERVAL;
                     state->connectionState = WiFi_scan_MQTT_down;
-                } 
+                }
 
                 break;
             }
-                
-            
+
+
             case WiFi_scan_MQTT_down: {
                 if (!state->is_wifi_activated) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
@@ -413,9 +400,9 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     break;
                 }
 
-                if (scanResult == WIFI_SCAN_RUNNING) 
+                if (scanResult == WIFI_SCAN_RUNNING)
                     break;
-                
+
                 if (scanResult == 0) {
                     WiFi.scanDelete();
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
@@ -425,51 +412,61 @@ void checkIntervals(struct state *oldstate, struct state *state) {
 
                 int bestNetworkDb = INT_MIN;
                 uint8_t bestBSSID[6];
+                String bestSSID_pw = "";
+                String bestSSID = "";
+
                 int32_t bestChannel = 0;
 
-                // TODO: use nextAPOffset
+                // loop through scan results
                 for (int i = 0; i < scanResult; ++i) {
                     String ssid_scan;
                     int32_t rssi_scan;
                     uint8_t sec_scan;
-                    uint8_t* BSSID_scan;
+                    uint8_t *BSSID_scan;
                     int32_t chan_scan;
                     WiFi.getNetworkInfo(i, ssid_scan, sec_scan, rssi_scan, BSSID_scan, chan_scan);
-                    
-                    for (int y = 0; y < APlist.size(); y++) {
-                        WifiAPlist_t entry = APlist[y];
+                    // loop through config
 
-                        if (ssid_scan == entry.ssid) {
-                            Serial.println("Found matching SSID");
-                            if (rssi_scan > bestNetworkDb) {
-                                if (sec_scan == WIFI_AUTH_OPEN || entry.passphrase) {
+                    for (auto &WiFi_Cred : WM_config.WiFi_Creds) {
+                        String ssid_config = WiFi_Cred.wifi_ssid;
+                        String ssid_passphrase = WiFi_Cred.wifi_pw;
+                        if (ssid_config == "")
+                            break;
+
+                        if (ssid_config == ssid_scan) {
+                            uint64_t bssidSetEleemnt;
+                            memcpy(&bssidSetEleemnt, BSSID_scan, 6);
+
+                            // found match
+                            if (triedBssid->find(bssidSetEleemnt) == triedBssid->end()
+                                && rssi_scan > bestNetworkDb
+                                && (sec_scan == WIFI_AUTH_OPEN || ssid_passphrase)) {
                                     bestNetworkDb = rssi_scan;
                                     bestChannel = chan_scan;
-                                    connectableAPlist.push_back(entry);
-                                    memcpy((void*) &bestBSSID, (void*) BSSID_scan, sizeof(bestBSSID));
-                                }
+                                    memcpy(&bestBSSID, BSSID_scan, sizeof(bestBSSID));
+                                    bestSSID_pw = ssid_passphrase;
+                                    bestSSID = ssid_config;
                             }
                         }
                     }
                 }
-
-                if (connectableAPlist.empty() || nextAPOffset == connectableAPlist.size()) {
+                if (bestSSID == "") {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
                     state->connectionState = WiFi_down_MQTT_down;
-                    break;
-                }
+                    // reset scan and go to main
+                    WiFi.scanDelete();
 
-                if (currentMillis > nextWiFiConnection) {    
-                    // best connection is on last index
-                    int index = connectableAPlist.size() - 1 - nextAPOffset;
-                    WiFi.begin(connectableAPlist[index].ssid, connectableAPlist[index].passphrase, bestChannel, bestBSSID);
+                } else {
+                    WiFi.begin(bestSSID.c_str(), bestSSID_pw.c_str(), bestChannel, bestBSSID);
+                    uint64_t bssidSetEleemnt;
+                    memcpy(&bssidSetEleemnt, bestBSSID, 6);
+                    triedBssid->insert(bssidSetEleemnt);
                     nextMqttConnection = currentMillis + MQTT_INTERVAL;
                     state->connectionState = WiFi_starting_MQTT_down;
                 }
-
-                WiFi.scanDelete();
                 break;
             }
+
 
             case WiFi_starting_MQTT_down: {
                 if (!state->is_wifi_activated) {
@@ -479,7 +476,6 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                 }
 
                 if (state->wifi_status != WL_CONNECTED) {
-                    nextAPOffset++;
                     nextWiFiConnection = currentMillis + WIFI_CONNECT_INTERVAL;
                     state->connectionState = WiFi_scan_MQTT_down;
                     break;
@@ -495,7 +491,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
 
                 break;
             }
-            
+
             case WiFi_up_MQTT_down: {
                 if (!state->is_wifi_activated) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
@@ -509,8 +505,8 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                         MQTTConnect(state);
                         state->connectionState = WiFi_up_MQTT_starting;
                     }
-                } 
-            
+                }
+
                 break;
             }
 
@@ -526,8 +522,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                 else if (state->wifi_status == WL_CONNECTED && !mqtt.connected()) {
                     nextMqttConnection = currentMillis + MQTT_INTERVAL;
                     state->connectionState = WiFi_up_MQTT_down;
-                }
-                else if (state->wifi_status != WL_CONNECTED) {
+                } else if (state->wifi_status != WL_CONNECTED) {
                     WiFi.disconnect(false, false);
                     state->connectionState = WiFi_down_MQTT_down;
                 }
@@ -546,15 +541,15 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     mqtt.disconnect();
                     state->connectionState = WiFi_down_MQTT_down;
                     break;
-                } 
-                
+                }
+
                 if (!mqtt.connected()) {
                     mqtt.disconnect();
                     nextMqttConnection = currentMillis + MQTT_INTERVAL;
                     state->connectionState = WiFi_up_MQTT_down;
                     break;
                 }
-                
+
                 if (currentMillis > nextMqttPublish || nextMqttPublish == 0) {
                     if ((String) state->mqttTopic != "") {
                         String co2Topic = (String) state->mqttTopic + (String) TOPIC_CO2;
@@ -571,23 +566,28 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                         if (mqtt.publish((const char *) humidityTopic.c_str(), (const char *) humidity.c_str()))
                             Serial.println("Published humidity to MQTT");
 
-                        if (mqtt.publish((const char *) temperatureTopic.c_str(), (const char *) temperature.c_str()))
+                        if (mqtt.publish((const char *) temperatureTopic.c_str(),
+                                         (const char *) temperature.c_str()))
                             Serial.println("Published temperature to MQTT");
                     }
 
                     nextMqttPublish = currentMillis + MQTT_PUBLISH_INTERVAL;
                 }
-
                 break;
             }
         }
     }
+    if (oldstate->wifi_status != state->wifi_status) {
+        Serial.println("wifi status transition from " + String(oldstate->wifi_status) + " to " + String(state->wifi_status));
+    }
+
 }
 
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
 #if USE_CONFIGURABLE_DNS
     // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
-    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn,
+    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw,
+                in_WM_STA_IPconfig._sta_static_sn,
                 in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
 #else
     // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
@@ -597,10 +597,12 @@ void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
 }
 
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
-    LOGERROR3(F("stationIP ="), in_WM_STA_IPconfig._sta_static_ip, ", gatewayIP =", in_WM_STA_IPconfig._sta_static_gw);
+    LOGERROR3(F("stationIP ="), in_WM_STA_IPconfig._sta_static_ip, ", gatewayIP =",
+              in_WM_STA_IPconfig._sta_static_gw);
     LOGERROR1(F("netMask ="), in_WM_STA_IPconfig._sta_static_sn);
 #if USE_CONFIGURABLE_DNS
-    LOGERROR3(F("dns1IP ="), in_WM_STA_IPconfig._sta_static_dns1, ", dns2IP =", in_WM_STA_IPconfig._sta_static_dns2);
+    LOGERROR3(F("dns1IP ="), in_WM_STA_IPconfig._sta_static_dns1, ", dns2IP =",
+              in_WM_STA_IPconfig._sta_static_dns2);
 #endif
 }
 
@@ -756,7 +758,8 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         // startConfigPortalModeless is blocking for about 11000ms
         if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
-            asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
+            asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(),
+                                                        (const char *) state->password);
         }
     }
 
@@ -816,7 +819,8 @@ void saveConfigPortalCredentials() {
             if (strlen(tempPW.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1)
                 strcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str());
             else
-                strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
+                strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(),
+                        sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
         }
 
         saveConfigData();
@@ -1425,7 +1429,8 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     } else if (state->wifi_info == infoWiFiConnected) {
         String connectedTo = (String) WiFi.SSID();
         String connectedInfo =
-                "Connected: " + ((connectedTo.length() > 18) ? (connectedTo.substring(0, 15) + "...") : connectedTo);
+                "Connected: " +
+                ((connectedTo.length() > 18) ? (connectedTo.substring(0, 15) + "...") : connectedTo);
         String ipInfo = "Local IP : " + WiFi.localIP().toString();
         DisbuffBody.drawString(connectedInfo, 15, 90);
         DisbuffBody.drawString(ipInfo, 15, 110);
@@ -1452,7 +1457,7 @@ void drawMQTTSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->is_mqtt_connected == oldstate->is_mqtt_connected &&
         strncmp(state->mqttServer, oldstate->mqttServer, sizeof(state->mqttServer) - 1) == 0 &&
-        strncmp(state->mqttPort, oldstate->mqttPort, sizeof(state->mqttPort) -1) == 0 &&
+        strncmp(state->mqttPort, oldstate->mqttPort, sizeof(state->mqttPort) - 1) == 0 &&
         strncmp(state->mqttDevice, oldstate->mqttDevice, sizeof(state->mqttDevice) - 1) == 0 &&
         state->menu_mode == oldstate->menu_mode)
         return;
@@ -1686,8 +1691,7 @@ void syncData(struct state *state) {
         if (fetchRemoteVersion(state) && setRtc(state)) {
             setTimeFromRtc();
             state->time_info = infoTimeSyncSuccess;
-        }
-        else
+        } else
             state->time_info = infoTimeSyncFailed;
         state->force_sync = false;
     } else if (state->is_sync_needed) {
