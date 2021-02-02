@@ -342,8 +342,11 @@ void initAirSensor() {
 }
 
 void checkIntervals(struct state *state) {
-#define WIFI_INTERVAL 2000L
-#define MQTT_INTERVAL 2000L
+    if (state->is_config_running)
+        return;
+
+#define WIFI_INTERVAL 5000L
+#define MQTT_INTERVAL 5000L
 #define MQTT_PUBLISH_INTERVAL 60000L
 
     static ulong wifiTimeout = 0;
@@ -354,62 +357,65 @@ void checkIntervals(struct state *state) {
 
     switch (state->connectionState) {
         case WiFi_down_MQTT_down:
-            if (state->wifi_status != WL_CONNECTED) {
+            if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated) {
                 connectMultiWiFi();
                 state->connectionState = WiFi_starting_MQTT_down;
-                wifiTimeout = currentMillis + WIFI_INTERVAL;
             }
             break;
         
         case WiFi_starting_MQTT_down:
-            if ((currentMillis > wifiTimeout)) {
+            if ((currentMillis > wifiTimeout || wifiTimeout == 0)) {
                 if (state->wifi_status == WL_CONNECTED)
                     state->connectionState = WiFi_up_MQTT_down;
                 else {
-                    WiFi.disconnect();
+                    Serial.println("WiFi not connected");
+                    WiFi.disconnect(false, false);
                     state->connectionState = WiFi_down_MQTT_down;
                 }
+
+                wifiTimeout = currentMillis + WIFI_INTERVAL;
             }
             break;
         
         case WiFi_up_MQTT_down:
             if (state->wifi_status == WL_CONNECTED) {
-                state->connectionState = WiFi_up_MQTT_starting;
-                mqttPublishTimeout = currentMillis + MQTT_INTERVAL;
+                if ((String) state->mqttServer != "" && (String) state->mqttPort != "") {
+                    setMQTTServer(state);
+                    MQTTConnect(state);
+                    state->connectionState = WiFi_up_MQTT_starting;
+                }
             } else 
                 state->connectionState = WiFi_down_MQTT_down;
         
             break;
 
         case WiFi_up_MQTT_starting:
-            if (currentMillis > mqttPublishTimeout) {
-                if (state->wifi_status == WL_CONNECTED && !mqtt.connected() &&
-                (String) state->mqttServer != "" && (String) state->mqttPort != "") {
-                    setMQTTServer(state);
-                    MQTTConnect(state);
-                }
-
-                if (mqtt.connected()) {
-                    mqttTimeout = currentMillis + MQTT_PUBLISH_INTERVAL;
-                    state->connectionState = WiFi_up_MQTT_up;
-                }
-                else
-                    state->connectionState = WiFi_up_MQTT_down;
+            if (currentMillis > mqttTimeout || mqttTimeout == 0) {
+                if (state->wifi_status == WL_CONNECTED) {
+                    if (mqtt.connected())
+                        state->connectionState = WiFi_up_MQTT_up;
+                    else
+                        state->connectionState = WiFi_up_MQTT_down;
+                
+                } else
+                    state->connectionState = WiFi_down_MQTT_down;
+                
+                mqttTimeout = currentMillis + MQTT_INTERVAL;
             }
             break;
 
         case WiFi_up_MQTT_up:
             if (state->wifi_status != WL_CONNECTED) {
-                WiFi.disconnect();
                 mqtt.disconnect();
                 state->connectionState = WiFi_down_MQTT_down;
             } else if (!mqtt.connected()) {
                 mqtt.disconnect();
                 state->connectionState = WiFi_up_MQTT_down;
             } else {
-                if (currentMillis > mqttTimeout) {
+                if (currentMillis > mqttPublishTimeout || mqttPublishTimeout == 0) {
                     if ((String) state->mqttTopic != "")
                         publishMQTT(state);
+                    mqttPublishTimeout = currentMillis + MQTT_PUBLISH_INTERVAL;
                 }
             }
             break;
@@ -428,10 +434,15 @@ uint8_t connectMultiWiFi() {
     uint8_t status = WiFi.status();
     std::vector<WifiAPlist_t> APlist;
 
-    APlist.push_back({ (char *) Router_SSID.c_str(), (char *) Router_Pass.c_str() });
-    Serial.println("Router_SSID: " + Router_SSID + "; Router_Pass: " + Router_Pass);
+    if (Router_SSID != "") {
+        APlist.push_back({ (char *) Router_SSID.c_str(), (char *) Router_Pass.c_str() });
+        Serial.println("Router_SSID: " + Router_SSID + "; Router_Pass: " + Router_Pass);   
+    }
 
     for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
+        if ((String) WM_config.WiFi_Creds[i].wifi_ssid == "")
+            break;
+
         APlist.push_back({ WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw });
         Serial.println("Config SSID" + (String) i + ": " + WM_config.WiFi_Creds[i].wifi_ssid + "; Pass: " + WM_config.WiFi_Creds[i].wifi_pw);
     }
@@ -450,8 +461,10 @@ uint8_t connectMultiWiFi() {
     }
 
     scanResult = WiFi.scanNetworks();
-    if (scanResult == WIFI_SCAN_RUNNING)
+    if (scanResult == WIFI_SCAN_RUNNING) {
+        Serial.println("Scan is still running. Returning");
         return WL_NO_SSID_AVAIL;
+    }
     else if (scanResult >= 0) {
         WifiAPlist_t bestNetwork { NULL, NULL };
         int bestNetworkDb = INT_MIN;
@@ -474,6 +487,7 @@ uint8_t connectMultiWiFi() {
                     WifiAPlist_t entry = APlist[x];
 
                     if (ssid_scan == entry.ssid) {
+                        Serial.println("Found matching SSID");
                         if (rssi_scan > bestNetworkDb) {
                             if (sec_scan == WIFI_AUTH_OPEN || entry.passphrase) {
                                 bestNetworkDb = rssi_scan;
@@ -491,14 +505,20 @@ uint8_t connectMultiWiFi() {
          WiFi.scanDelete();
 
         if (bestNetwork.ssid) {
+            Serial.println("Connecting to: " + (String) bestNetwork.ssid);
+            Serial.println("* SSID: " + (String) bestNetwork.ssid);
+            Serial.println("* Pass: " + (String) bestNetwork.passphrase);
+            Serial.println("* Channel: " + (String) bestChannel);
+
             WiFi.begin(bestNetwork.ssid, bestNetwork.passphrase, bestChannel, bestBSSID);
-            delay(10);
             status = WiFi.status();
-        }
+            
+        } else 
+            Serial.println("No matching SSID found in scan");
 
     } else {
         Serial.println("Deleting old WiFi config and start async scan");
-        WiFi.disconnect();
+        WiFi.disconnect(false, false);
         WiFi.scanNetworks(true);
     }
 
@@ -658,21 +678,19 @@ void handleNavigation(struct state *state) {
 void handleWiFi(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated)
         asyncWifiManager->loop();
-
-    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
+    else
         WiFi.disconnect(true, false);
 
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_running) {
+        bool shouldStartWiFiManager = true;
         Router_SSID = asyncWifiManager->WiFi_SSID();
         Router_Pass = asyncWifiManager->WiFi_Pass();
-        bool shouldStartWiFiManager = true;
 
-        if (Router_SSID != "" && Router_Pass.length() >= MIN_AP_PASSWORD_SIZE) {
+        if (Router_SSID != "" || WiFi.SSID() != "") {
             shouldStartWiFiManager = false;
         } else if (loadConfigData()) {
             for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-                if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
-                    (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
+                if ((String) WM_config.WiFi_Creds[i].wifi_ssid != "") {
                     shouldStartWiFiManager = false;
                 }
             }
@@ -723,14 +741,8 @@ void configPortalCallback() {
     saveMQTTConfig(&state);
     setMQTTServer(&state);
 
-    if (state.mqttDevice != mqttDevice->getValue()) {
+    if (state.mqttDevice != mqttDevice->getValue())
         mqtt.disconnect();
-
-        if ((String) state.mqttUser != "" && (String) state.mqttPassword != "")
-            mqtt.connect(state.mqttDevice, state.mqttUser, state.mqttPassword);
-        else 
-            mqtt.connect(state.mqttDevice);
-    }
 }
 
 void saveConfigPortalCredentials() {
