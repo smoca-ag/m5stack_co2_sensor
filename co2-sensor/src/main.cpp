@@ -350,8 +350,6 @@ void checkIntervals(struct state *oldstate, struct state *state) {
     updateWiFiInfo(oldstate, state);
 
     if (!state->is_config_running) {
-
-
         static ulong nextWiFiScan = 0;
         static ulong wifiConnectionPause = 0;
         static ulong nextMqttConnection = 0;
@@ -390,7 +388,6 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                 break;
             }
 
-
             case WiFi_scan_MQTT_down: {
                 if (!state->is_wifi_activated) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
@@ -407,6 +404,10 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     state->connectionState = WiFi_down_MQTT_down;
                     break;
                 }
+
+#if !USE_DHCP_IP
+    configWiFi(WM_STA_IPconfig);
+#endif
 
                 int bestNetworkDb = INT_MIN;
                 uint8_t bestBSSID[6];
@@ -614,6 +615,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
             }
         }
     }
+
     if (oldstate->connectionState != state->connectionState) {
         Serial.println("connection state from " + String(oldstate->connectionState) + " to " + String(state->connectionState));
     }
@@ -834,6 +836,8 @@ void configPortalCallback() {
 
     saveMQTTConfig(&state);
     setMQTTServer(&state);
+
+    WiFi.mode(WIFI_STA); // close AP
 }
 
 void saveConfigPortalCredentials() {
