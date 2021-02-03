@@ -348,6 +348,8 @@ void checkIntervals(struct state *oldstate, struct state *state) {
     }
 
     updateWiFiInfo(oldstate, state);
+    Router_SSID = asyncWifiManager->WiFi_SSID();
+    Router_Pass = asyncWifiManager->WiFi_Pass();
 
     if (!state->is_config_running) {
         static ulong nextWiFiScan = 0;
@@ -355,7 +357,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
         static ulong nextMqttConnection = 0;
         static ulong nextMqttPublish = 0;
         static ulong currentMillis;
-        static auto *triedBssid = new std::set<uint64_t >();
+        static auto *triedBssid = new std::set<uint64_t>();
         static int8_t scanResult;
 
         currentMillis = millis();
@@ -406,7 +408,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                 }
 
 #if !USE_DHCP_IP
-    configWiFi(WM_STA_IPconfig);
+                configWiFi(WM_STA_IPconfig);
 #endif
 
                 int bestNetworkDb = INT_MIN;
@@ -424,7 +426,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     uint8_t *BSSID_scan;
                     int32_t chan_scan;
                     WiFi.getNetworkInfo(i, ssid_scan, sec_scan, rssi_scan, BSSID_scan, chan_scan);
-                    
+
                     // loop through config credentials
                     for (auto &WiFi_Cred : WM_config.WiFi_Creds) {
                         String config_ssid = WiFi_Cred.wifi_ssid;
@@ -441,23 +443,20 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                             if (triedBssid->find(bssidSetElement) == triedBssid->end()
                                 && rssi_scan > bestNetworkDb
                                 && (sec_scan == WIFI_AUTH_OPEN || config_passphrase)) {
-                                    bestNetworkDb = rssi_scan;
-                                    bestChannel = chan_scan;
-                                    memcpy(&bestBSSID, BSSID_scan, sizeof(bestBSSID));
-                                    bestSSID_pw = config_passphrase;
-                                    bestSSID = config_ssid;
+                                bestNetworkDb = rssi_scan;
+                                bestChannel = chan_scan;
+                                memcpy(&bestBSSID, BSSID_scan, sizeof(bestBSSID));
+                                bestSSID_pw = config_passphrase;
+                                bestSSID = config_ssid;
                             }
                         }
                     }
 
                     // check wifi manager credentials
-                    String managerSSID = asyncWifiManager->WiFi_SSID();
-                    String managerPassphrase = asyncWifiManager->WiFi_Pass();
-
-                    if (managerSSID == "")
+                    if (Router_SSID == "")
                         continue;
 
-                    if (managerSSID == ssid_scan) {
+                    if (Router_SSID == ssid_scan) {
                         uint64_t bssidSetElement;
                         memcpy(&bssidSetElement, BSSID_scan, 6);
                         Serial.println("Found matching ssid: " + ssid_scan);
@@ -465,12 +464,12 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                         // found match
                         if (triedBssid->find(bssidSetElement) == triedBssid->end()
                             && rssi_scan > bestNetworkDb
-                            && (sec_scan == WIFI_AUTH_OPEN || managerPassphrase)) {
-                                bestNetworkDb = rssi_scan;
-                                bestChannel = chan_scan;
-                                memcpy(&bestBSSID, BSSID_scan, sizeof(bestBSSID));
-                                bestSSID_pw = managerPassphrase;
-                                bestSSID = managerSSID;
+                            && (sec_scan == WIFI_AUTH_OPEN || Router_Pass)) {
+                            bestNetworkDb = rssi_scan;
+                            bestChannel = chan_scan;
+                            memcpy(&bestBSSID, BSSID_scan, sizeof(bestBSSID));
+                            bestSSID_pw = Router_Pass;
+                            bestSSID = Router_SSID;
                         }
                     }
                 }
@@ -595,8 +594,8 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                         String temperatureTopic = (String) state->mqttTopic + (String) TOPIC_TEMPERATURE;
 
                         String co2 = (String) state->co2_ppm;
-                        String humidity = (String) ((double) state->humidity_percent / 10);
-                        String temperature = (String) ((double) state->temperature_celsius / 10);
+                        String humidity = (String)((double) state->humidity_percent / 10);
+                        String temperature = (String)((double) state->temperature_celsius / 10);
 
                         if (mqtt.publish((const char *) co2Topic.c_str(), (const char *) co2.c_str()))
                             Serial.println("Published co2 to MQTT");
@@ -617,7 +616,8 @@ void checkIntervals(struct state *oldstate, struct state *state) {
     }
 
     if (oldstate->connectionState != state->connectionState) {
-        Serial.println("connection state from " + String(oldstate->connectionState) + " to " + String(state->connectionState));
+        Serial.println(
+                "connection state from " + String(oldstate->connectionState) + " to " + String(state->connectionState));
     }
 
 }
@@ -731,8 +731,8 @@ void saveConfigData() {
     LOGERROR(F("SaveWiFiCfgFile "));
 
     if (file) {
-        file.write((uint8_t *) &WM_config, sizeof(WM_config));
-        file.write((uint8_t *) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
+        file.write((uint8_t * ) & WM_config, sizeof(WM_config));
+        file.write((uint8_t * ) & WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
         file.close();
         LOGERROR(F("OK"));
     } else {
@@ -778,8 +778,6 @@ void handleWiFi(struct state *oldstate, struct state *state) {
 
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_running) {
         bool shouldStartWiFiManager = true;
-        Router_SSID = asyncWifiManager->WiFi_SSID();
-        Router_Pass = asyncWifiManager->WiFi_Pass();
 
         if (Router_SSID != "" || WiFi.SSID() != "") {
             shouldStartWiFiManager = false;
