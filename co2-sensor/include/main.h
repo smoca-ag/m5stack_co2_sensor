@@ -1,35 +1,3 @@
-// hardware
-#include <m5stack_core2/pins_arduino.h>
-#include <Arduino.h>
-#include <M5Core2.h>
-#include <SparkFun_SCD30_Arduino_Library.h>
-
-// memory
-#include <FS.h>
-#include <SD.h>
-#include <SPI.h>
-#include <sys/time.h>
-#include <SPIFFS.h>
-
-// WiFi AccessPoint and ConfigPortal
-#include <WiFi.h>
-#include <WiFiMulti.h>
-#include <ESPAsync_WiFiManager.h>
-#include <ArduinoJson.h>
-
-// time sync
-#include <NTPClient.h>
-
-// firmware update
-#include <WiFiClient.h>
-#include <HTTPClient.h>
-#include <Update.h>
-
-// mqtt
-#include <PubSubClient.h>
-
-#include <smoca_logo.h>
-
 #define VERSION_NUMBER "1.1.3"
 #define VERSION_NUMBER_LEN 8
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
@@ -75,6 +43,44 @@
 #define MQTT_USERNAME_LEN 24
 #define MQTT_KEY_LEN 32
 
+
+#define WIFI_SCAN_INTERVAL 5000L
+#define WIFI_CONNECT_INTERVAL 1000L
+#define MQTT_INTERVAL 1000L
+#define MQTT_PUBLISH_INTERVAL 60000L
+
+// hardware
+#include <m5stack_core2/pins_arduino.h>
+#include <Arduino.h>
+#include <M5Core2.h>
+#include <SparkFun_SCD30_Arduino_Library.h>
+
+// memory
+#include <FS.h>
+#include <SD.h>
+#include <SPI.h>
+#include <sys/time.h>
+#include <SPIFFS.h>
+
+// WiFi AccessPoint and ConfigPortal
+#include <WiFi.h>
+#include <ESPAsync_WiFiManager.h>
+#include <ArduinoJson.h>
+
+// time sync
+#include <NTPClient.h>
+
+// firmware update
+#include <WiFiClient.h>
+#include <HTTPClient.h>
+#include <Update.h>
+
+// mqtt
+#include <PubSubClient.h>
+
+#include <smoca_logo.h>
+
+#include <set>
 typedef struct {
     char wifi_ssid[MAX_SSID_LEN];
     char wifi_pw[MAX_PW_LEN];
@@ -120,12 +126,12 @@ enum info {
 };
 
 enum connectionState {
-    WiFi_down_MQTT_down,
-    WiFi_scan_MQTT_down,
-    WiFi_starting_MQTT_down,
-    WiFi_up_MQTT_down,
-    WiFi_up_MQTT_starting,
-    WiFi_up_MQTT_up
+    WiFi_down_MQTT_down = 0,
+    WiFi_scan_MQTT_down = 1,
+    WiFi_starting_MQTT_down = 2,
+    WiFi_up_MQTT_down = 3,
+    WiFi_up_MQTT_starting = 4,
+    WiFi_up_MQTT_up = 5
 };
 
 struct state {
