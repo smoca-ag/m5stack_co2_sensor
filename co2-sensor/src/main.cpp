@@ -162,11 +162,11 @@ void loop() {
 
     saveStateFile(&oldstate, &state);
 
-    checkIntervals(&oldstate, &state);
+    handleWifiMqtt(&oldstate, &state);
 
     drawScreen(&oldstate, &state);
 
-    handleWiFi(&oldstate, &state);
+    handleConfigPortal(&oldstate, &state);
     syncData(&state);
     handleFirmware(&oldstate, &state);
     writeSsd(&state);
@@ -340,7 +340,7 @@ void initAirSensor() {
     airSensor.setAltitudeCompensation(440);
 }
 
-void checkIntervals(struct state *oldstate, struct state *state) {
+void handleWifiMqtt(struct state *oldstate, struct state *state) {
     if (WiFi.status() != oldstate->wifi_status) {
         state->wifi_status = WiFi.status();
         Serial.println(
@@ -365,7 +365,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
         switch (state->connectionState) {
             case WiFi_down_MQTT_down: {
                 if (!state->is_wifi_activated) {
-                    if (WiFi.status() == WL_CONNECTED)
+                    if (state->wifi_status == WL_CONNECTED)
                         WiFi.disconnect(true, false);
 
                     if (mqtt.connected())
@@ -374,16 +374,16 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     break;
                 }
 
-                if (WiFi.status() == WL_CONNECTED && mqtt.connected()) {
+                if (state->wifi_status == WL_CONNECTED && mqtt.connected()) {
                     state->connectionState = WiFi_up_MQTT_up;
 
-                } else if (WiFi.status() == WL_CONNECTED && !mqtt.connected()) {
+                } else if (state->wifi_status == WL_CONNECTED && !mqtt.connected()) {
                     nextMqttConnection = currentMillis + MQTT_INTERVAL;
                     state->connectionState = WiFi_up_MQTT_down;
 
-                } else if (WiFi.status() != WL_CONNECTED && currentMillis > nextWiFiScan) {
+                } else if (state->wifi_status != WL_CONNECTED && currentMillis > nextWiFiScan) {
                     triedBssid->clear();
-                    scanResult = WiFi.scanNetworks();
+                    WiFi.scanNetworks(true);
                     state->connectionState = WiFi_scan_MQTT_down;
                 }
 
@@ -396,6 +396,8 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     state->connectionState = WiFi_down_MQTT_down;
                     break;
                 }
+
+                scanResult = WiFi.scanComplete();
 
                 if (scanResult == WIFI_SCAN_RUNNING)
                     break;
@@ -418,7 +420,6 @@ void checkIntervals(struct state *oldstate, struct state *state) {
 
                 int32_t bestChannel = 0;
 
-                // loop through scan results
                 for (int i = 0; i < scanResult; ++i) {
                     String ssid_scan;
                     int32_t rssi_scan;
@@ -439,7 +440,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                             memcpy(&bssidSetElement, BSSID_scan, 6);
                             Serial.println("Found matching ssid: " + ssid_scan);
 
-                            // found match
+                            // found best
                             if (triedBssid->find(bssidSetElement) == triedBssid->end()
                                 && rssi_scan > bestNetworkDb
                                 && (sec_scan == WIFI_AUTH_OPEN || config_passphrase)) {
@@ -461,7 +462,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                         memcpy(&bssidSetElement, BSSID_scan, 6);
                         Serial.println("Found matching ssid: " + ssid_scan);
 
-                        // found match
+                        // found best
                         if (triedBssid->find(bssidSetElement) == triedBssid->end()
                             && rssi_scan > bestNetworkDb
                             && (sec_scan == WIFI_AUTH_OPEN || Router_Pass)) {
@@ -474,10 +475,11 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     }
                 }
 
+                WiFi.scanDelete();
+
                 if (bestSSID == "") {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
                     triedBssid->clear();
-                    WiFi.scanDelete();
                     state->connectionState = WiFi_down_MQTT_down;
                     Serial.println("No SSID found to connect to.");
 
@@ -488,7 +490,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     memcpy(&bssidSetElement, bestBSSID, 6);
                     triedBssid->insert(bssidSetElement);
                     nextMqttConnection = currentMillis + MQTT_INTERVAL;
-                    wifiConnectionPause = currentMillis + WIFI_CONNECT_INTERVAL;
+                    wifiConnectionPause = currentMillis + WIFI_CONNECT_TIMEOUT;
                     state->connectionState = WiFi_starting_MQTT_down;
                 }
                 break;
@@ -532,7 +534,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                 if ((String) state->mqttServer == "" || (String) state->mqttPort == "")
                     break;
 
-                if (WiFi.status() != WL_CONNECTED) {
+                if (state->wifi_status != WL_CONNECTED) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
                     state->connectionState = WiFi_down_MQTT_down;
                     break;
@@ -772,7 +774,7 @@ void handleNavigation(struct state *state) {
     }
 }
 
-void handleWiFi(struct state *oldstate, struct state *state) {
+void handleConfigPortal(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated)
         asyncWifiManager->loop();
 
@@ -1440,7 +1442,6 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->is_wifi_activated == oldstate->is_wifi_activated &&
         state->is_requesting_reset == oldstate->is_requesting_reset &&
-        state->wifi_status == oldstate->wifi_status &&
         state->wifi_info == oldstate->wifi_info &&
         state->menu_mode == oldstate->menu_mode)
         return;

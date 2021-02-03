@@ -44,8 +44,8 @@
 #define MQTT_KEY_LEN 32
 
 #define WIFI_SCAN_INTERVAL 5000L
-#define WIFI_CONNECT_INTERVAL 1000L
-#define MQTT_INTERVAL 1000L
+#define WIFI_CONNECT_TIMEOUT 5000L
+#define MQTT_INTERVAL 2000L
 #define MQTT_PUBLISH_INTERVAL 60000L
 
 // hardware
@@ -197,7 +197,7 @@ void initAirSensor();
 
 void initAsyncWifiManager(struct state *state);
 
-void checkIntervals(struct state *oldstate, struct state *state);
+void handleWifiMqtt(struct state *oldstate, struct state *state);
 
 void connectWiFi(struct state *state);
 
@@ -215,7 +215,7 @@ void saveConfigData();
 
 void handleNavigation(struct state *state);
 
-void handleWiFi(struct state *oldstate, struct state *state);
+void handleConfigPortal(struct state *oldstate, struct state *state);
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager);
 
