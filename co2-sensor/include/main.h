@@ -4,7 +4,7 @@
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
 
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 1
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 0
 
 #define GRAPH_UNITS 240
 
@@ -42,7 +42,6 @@
 #define MQTT_TOPIC_LEN 64
 #define MQTT_USERNAME_LEN 24
 #define MQTT_KEY_LEN 32
-
 
 #define WIFI_SCAN_INTERVAL 5000L
 #define WIFI_CONNECT_INTERVAL 1000L
