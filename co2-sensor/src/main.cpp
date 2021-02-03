@@ -436,6 +436,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                         if (ssid_config == ssid_scan) {
                             uint64_t bssidSetEleemnt;
                             memcpy(&bssidSetEleemnt, BSSID_scan, 6);
+                            Serial.println("found " + ssid_scan);
 
                             // found match
                             if (triedBssid->find(bssidSetEleemnt) == triedBssid->end()
@@ -454,6 +455,7 @@ void checkIntervals(struct state *oldstate, struct state *state) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
                     state->connectionState = WiFi_down_MQTT_down;
                     // reset scan and go to main
+                    triedBssid->clear();
                     WiFi.scanDelete();
 
                 } else {
@@ -577,8 +579,8 @@ void checkIntervals(struct state *oldstate, struct state *state) {
             }
         }
     }
-    if (oldstate->wifi_status != state->wifi_status) {
-        Serial.println("wifi status transition from " + String(oldstate->wifi_status) + " to " + String(state->wifi_status));
+    if (oldstate->connectionState != state->connectionState) {
+        Serial.println("connection state from " + String(oldstate->connectionState) + " to " + String(state->connectionState));
     }
 
 }

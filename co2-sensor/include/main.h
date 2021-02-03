@@ -126,12 +126,12 @@ enum info {
 };
 
 enum connectionState {
-    WiFi_down_MQTT_down,
-    WiFi_scan_MQTT_down,
-    WiFi_starting_MQTT_down,
-    WiFi_up_MQTT_down,
-    WiFi_up_MQTT_starting,
-    WiFi_up_MQTT_up
+    WiFi_down_MQTT_down = 0,
+    WiFi_scan_MQTT_down = 1,
+    WiFi_starting_MQTT_down = 2,
+    WiFi_up_MQTT_down = 3,
+    WiFi_up_MQTT_starting = 4,
+    WiFi_up_MQTT_up = 5
 };
 
 struct state {
