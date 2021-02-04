@@ -265,17 +265,6 @@ void initAsyncWifiManager(struct state *state) {
     asyncWifiManager->setAPCallback(accessPointCallback);
     asyncWifiManager->setSaveConfigCallback(configPortalCallback);
 
-    /* 
-        startConfigPortalModeless is blocking for about 11000ms
-        problem is connectWifi("", "") in ESPAsync_WiFiManager (line 635)
-        this funtion calls waitForConnectionResult() (line 1033) which calls blocking function WiFi.waitForConnectionResult()
-        if _connectTimeout is NOT 0 then line 1033 does NOT call WiFi.waitForConnectionResult() which is what we want
-        so we set _connectTimeout as low as possible to prevent the timeout to block the code as well.
-        BUT if we set it too low, then saveConfigCallback will never be called because the manager cannot connect to a wifi.
-        Setting it to 2, startConfigPortalModeless is just blocking for about 4000ms and still has time to connect.
-    */
-    asyncWifiManager->setConnectTimeout(2L);
-
     mqttServer = new ESPAsync_WMParameter(MQTT_SERVER_Label, "MQTT Server *", state->mqttServer, MQTT_SERVER_LEN - 1);
     mqttPort = new ESPAsync_WMParameter(MQTT_SERVERPORT_Label, "MQTT Serverport *", state->mqttPort, MQTT_PORT_LEN - 1);
     mqttTopic = new ESPAsync_WMParameter(MQTT_TOPIC_Label, "MQTT Topic *", state->mqttTopic, MQTT_TOPIC_LEN - 1);
@@ -805,7 +794,8 @@ void handleConfigPortal(struct state *oldstate, struct state *state) {
         if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
             asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(),
-                                                        (const char *) state->password);
+                                                        (const char *) state->password,
+                                                        false);
         }
     }
 
@@ -820,7 +810,7 @@ void handleConfigPortal(struct state *oldstate, struct state *state) {
         state->is_requesting_reset = false;
 
         Serial.println("Starting Configuration Portal for reset.");
-        asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
+        asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password, false);
     }
 }
 
