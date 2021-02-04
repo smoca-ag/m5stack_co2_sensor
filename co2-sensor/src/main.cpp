@@ -531,14 +531,14 @@ void handleWifiMqtt(struct state *oldstate, struct state *state) {
                     break;
                 }
 
-                if ((String) state->mqttServer == "" || (String) state->mqttPort == "")
-                    break;
-
                 if (state->wifi_status != WL_CONNECTED) {
                     nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
                     state->connectionState = WiFi_down_MQTT_down;
                     break;
                 }
+
+                if ((String) state->mqttServer == "" || (String) state->mqttPort == "")
+                    break;
 
                 if (!mqtt.connected() && currentMillis > nextMqttConnection) {
                     setMQTTServer(state);
@@ -556,15 +556,19 @@ void handleWifiMqtt(struct state *oldstate, struct state *state) {
                     break;
                 }
 
-                if (state->wifi_status == WL_CONNECTED && mqtt.connected())
-                    state->connectionState = WiFi_up_MQTT_up;
-                else if (state->wifi_status == WL_CONNECTED && !mqtt.connected()) {
-                    nextMqttConnection = currentMillis + MQTT_INTERVAL;
-                    state->connectionState = WiFi_up_MQTT_down;
-                } else if (state->wifi_status != WL_CONNECTED) {
+                if (state->wifi_status != WL_CONNECTED) {
                     WiFi.disconnect(false, false);
                     state->connectionState = WiFi_down_MQTT_down;
+                    break;
                 }
+
+                if (mqtt.connected())
+                    state->connectionState = WiFi_up_MQTT_up;
+                else {
+                    nextMqttConnection = currentMillis + MQTT_INTERVAL;
+                    state->connectionState = WiFi_up_MQTT_down;
+                }
+
                 break;
             }
 
@@ -793,9 +797,9 @@ void handleConfigPortal(struct state *oldstate, struct state *state) {
 
         if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
+
             asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(),
-                                                        (const char *) state->password,
-                                                        false);
+                                                        (const char *) state->password);
         }
     }
 
