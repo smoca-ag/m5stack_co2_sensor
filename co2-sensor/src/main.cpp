@@ -797,9 +797,11 @@ void handleConfigPortal(struct state *oldstate, struct state *state) {
 
         if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
-
+            WiFi.begin("", "");
+            delay(1000);
             asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(),
-                                                        (const char *) state->password);
+                                                        (const char *) state->password,
+                                                        false);
         }
     }
 
