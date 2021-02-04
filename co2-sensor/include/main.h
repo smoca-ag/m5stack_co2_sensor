@@ -1,46 +1,14 @@
-// hardware
-#include <m5stack_core2/pins_arduino.h>
-#include <Arduino.h>
-#include <M5Core2.h>
-#include <SparkFun_SCD30_Arduino_Library.h>
-
-// memory
-#include <FS.h>
-#include <SD.h>
-#include <SPI.h>
-#include <sys/time.h>
-#include <SPIFFS.h>
-
-// WiFi AccessPoint and ConfigPortal
-#include <WiFi.h>
-#include <WiFiMulti.h>
-#include <ESPAsync_WiFiManager.h>
-#include <ArduinoJson.h>
-
-// time sync
-#include <NTPClient.h>
-
-// firmware update
-#include <WiFiClient.h>
-#include <HTTPClient.h>
-#include <Update.h>
-
-// mqtt
-#include <PubSubClient.h>
-
-#include <smoca_logo.h>
-
-#define VERSION_NUMBER "1.1.2"
+#define VERSION_NUMBER "1.1.3"
 #define VERSION_NUMBER_LEN 8
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
 #define REMOTE_VERSION_FILE "/version.json"
 #define REMOTE_FIRMWARE_FILE "/firmware.bin"
 
-#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 4
+#define _ESPASYNC_WIFIMGR_LOGLEVEL_ 0
 
 #define GRAPH_UNITS 240
 
-#define NUM_WIFI_CREDENTIALS 1
+#define NUM_WIFI_CREDENTIALS 2
 #define MAX_SSID_LEN 32
 #define MAX_PW_LEN 64
 #define MIN_AP_PASSWORD_SIZE 8
@@ -75,6 +43,43 @@
 #define MQTT_USERNAME_LEN 24
 #define MQTT_KEY_LEN 32
 
+#define WIFI_SCAN_INTERVAL 5000L
+#define WIFI_CONNECT_TIMEOUT 5000L
+#define MQTT_INTERVAL 2000L
+#define MQTT_PUBLISH_INTERVAL 60000L
+
+// hardware
+#include <m5stack_core2/pins_arduino.h>
+#include <Arduino.h>
+#include <M5Core2.h>
+#include <SparkFun_SCD30_Arduino_Library.h>
+
+// memory
+#include <FS.h>
+#include <SD.h>
+#include <SPI.h>
+#include <sys/time.h>
+#include <SPIFFS.h>
+
+// WiFi AccessPoint and ConfigPortal
+#include <WiFi.h>
+#include <ESPAsync_WiFiManager.h>
+#include <ArduinoJson.h>
+
+// time sync
+#include <NTPClient.h>
+
+// firmware update
+#include <WiFiClient.h>
+#include <HTTPClient.h>
+#include <Update.h>
+
+// mqtt
+#include <PubSubClient.h>
+
+#include <smoca_logo.h>
+
+#include <set>
 typedef struct {
     char wifi_ssid[MAX_SSID_LEN];
     char wifi_pw[MAX_PW_LEN];
@@ -119,6 +124,15 @@ enum info {
     infoEmpty
 };
 
+enum connectionState {
+    WiFi_down_MQTT_down = 0,
+    WiFi_scan_MQTT_down = 1,
+    WiFi_starting_MQTT_down = 2,
+    WiFi_up_MQTT_down = 3,
+    WiFi_up_MQTT_starting = 4,
+    WiFi_up_MQTT_up = 5
+};
+
 struct state {
     int co2_ppm;
     int temperature_celsius;
@@ -157,6 +171,7 @@ struct state {
     char mqttTopic[MQTT_TOPIC_LEN];
     char mqttUser[MQTT_USERNAME_LEN];
     char mqttPassword[MQTT_KEY_LEN];
+    enum connectionState connectionState = WiFi_down_MQTT_down;
 };
 
 struct graph {
@@ -182,11 +197,9 @@ void initAirSensor();
 
 void initAsyncWifiManager(struct state *state);
 
-void checkIntervals(struct state *state);
+void handleWifiMqtt(struct state *oldstate, struct state *state);
 
 void connectWiFi(struct state *state);
-
-uint8_t connectMultiWiFi();
 
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig);
 
@@ -202,7 +215,7 @@ void saveConfigData();
 
 void handleNavigation(struct state *state);
 
-void handleWiFi(struct state *oldstate, struct state *state);
+void handleConfigPortal(struct state *oldstate, struct state *state);
 
 void accessPointCallback(ESPAsync_WiFiManager *asyncWifiManager);
 
@@ -211,8 +224,6 @@ void configPortalCallback();
 void saveConfigPortalCredentials();
 
 bool areRouterCredentialsValid();
-
-void publishMQTT(struct state *state);
 
 void setMQTTServer(struct state *state);
 
@@ -237,8 +248,6 @@ void updateLed(struct state *oldstate, struct state *state);
 void setPassword(struct state *state);
 
 void saveStateFile(struct state *oldstate, struct state *state);
-
-void updateWiFiState(struct state *oldstate, struct state *state);
 
 void updateWiFiInfo(struct state *oldstate, struct state *state);
 

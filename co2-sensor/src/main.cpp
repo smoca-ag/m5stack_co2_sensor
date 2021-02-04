@@ -68,7 +68,6 @@ SCD30 airSensor;
 
 WM_Config WM_config;
 WiFi_STA_IPConfig WM_STA_IPconfig;
-WiFiMulti wifiMulti;
 
 DNSServer dnsServer;
 String Router_SSID;
@@ -158,19 +157,18 @@ void loop() {
     updateCo2(&state);
     updateGraph(&oldstate, &state);
     updateLed(&oldstate, &state);
-    updateWiFiState(&oldstate, &state);
-    updateWiFiInfo(&oldstate, &state);
     updateTimeState(&oldstate, &state);
     updateMQTT(&state);
 
     saveStateFile(&oldstate, &state);
 
+    handleWifiMqtt(&oldstate, &state);
+
     drawScreen(&oldstate, &state);
 
-    handleWiFi(&oldstate, &state);
+    handleConfigPortal(&oldstate, &state);
     syncData(&state);
     handleFirmware(&oldstate, &state);
-    checkIntervals(&state);
     writeSsd(&state);
 
     cycle++;
@@ -260,7 +258,7 @@ void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig) {
 
 void initAsyncWifiManager(struct state *state) {
     asyncWifiManager = new ESPAsync_WiFiManager(&webServer, &dnsServer);
-    asyncWifiManager->setDebugOutput(true);
+    asyncWifiManager->setDebugOutput(false);
     asyncWifiManager->setMinimumSignalQuality(-1);
     asyncWifiManager->setConfigPortalChannel(0);
     asyncWifiManager->setConfigPortalTimeout(120);
@@ -342,85 +340,299 @@ void initAirSensor() {
     airSensor.setAltitudeCompensation(440);
 }
 
-void checkIntervals(struct state *state) {
-#define WIFICHECK_INTERVAL 2000L
-#define MQTT_PUBLISH_INTERVAL 60000L
-#define MQTT_CHECK_CONNECTION 2000L
-
-    static ulong checkwifi_timeout = 0;
-    static ulong checkmqtt_timeout = 0;
-    static ulong checkmqtt_connection_timeout = 0;
-    static ulong current_millis;
-    current_millis = millis();
-
-    if ((current_millis > checkwifi_timeout) || (checkwifi_timeout == 0)) {
-        connectWiFi(state);
-        checkwifi_timeout = current_millis + WIFICHECK_INTERVAL;
+void handleWifiMqtt(struct state *oldstate, struct state *state) {
+    if (WiFi.status() != oldstate->wifi_status) {
+        state->wifi_status = WiFi.status();
+        Serial.println(
+                "WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
     }
 
-    if (current_millis > checkmqtt_connection_timeout || checkmqtt_connection_timeout == 0) {
-        if (state->wifi_status == WL_CONNECTED && !mqtt.connected() &&
-            (String) state->mqttServer != "" && (String) state->mqttPort != "") {
-            setMQTTServer(state);
-            MQTTConnect(state);
-        } else if (state->wifi_status != WL_CONNECTED && mqtt.connected())
-            mqtt.disconnect();
+    updateWiFiInfo(oldstate, state);
+    Router_SSID = asyncWifiManager->WiFi_SSID();
+    Router_Pass = asyncWifiManager->WiFi_Pass();
 
-        checkmqtt_connection_timeout = current_millis + MQTT_CHECK_CONNECTION;
-    }
+    if (!state->is_config_running) {
+        static ulong nextWiFiScan = 0;
+        static ulong wifiConnectionPause = 0;
+        static ulong nextMqttConnection = 0;
+        static ulong nextMqttPublish = 0;
+        static ulong currentMillis;
+        static auto *triedBssid = new std::set<uint64_t>();
+        static int8_t scanResult;
 
-    if (current_millis > checkmqtt_timeout || checkmqtt_timeout == 0) {
-        if (state->wifi_status == WL_CONNECTED && (String) state->mqttTopic != "" && mqtt.connected())
-            publishMQTT(state);
+        currentMillis = millis();
 
-        checkmqtt_timeout = current_millis + MQTT_PUBLISH_INTERVAL;
-    }
-}
+        switch (state->connectionState) {
+            case WiFi_down_MQTT_down: {
+                if (!state->is_wifi_activated) {
+                    if (state->wifi_status == WL_CONNECTED)
+                        WiFi.disconnect(true, false);
 
-void connectWiFi(struct state *state) {
-    if (state->wifi_status != WL_CONNECTED && state->is_wifi_activated && !state->is_config_running) {
-        Serial.println("Not connected. Trying to reconnect. Status: " + (String) state->wifi_status);
-        if (connectMultiWiFi() != WL_CONNECTED)
-            Serial.println("Could not reconnect WiFi.");
-    }
-}
+                    if (mqtt.connected())
+                        mqtt.disconnect();
 
-uint8_t connectMultiWiFi() {
-    uint8_t status;
-    LOGERROR(F("ConnectMultiWiFi with :"));
+                    break;
+                }
 
-    if (Router_SSID != "")
-        LOGERROR3(F("* Flash-stored Router_SSID = "), Router_SSID, F(", Router_Pass = "), Router_Pass);
+                if (state->wifi_status == WL_CONNECTED && mqtt.connected()) {
+                    state->connectionState = WiFi_up_MQTT_up;
 
-    for (uint8_t i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-        if (String(WM_config.WiFi_Creds[i].wifi_ssid) != "" &&
-            strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)
-            LOGERROR3(F("* Additional SSID = "), WM_config.WiFi_Creds[i].wifi_ssid, F(", PW = "),
-                      WM_config.WiFi_Creds[i].wifi_pw);
-    }
+                } else if (state->wifi_status == WL_CONNECTED && !mqtt.connected()) {
+                    nextMqttConnection = currentMillis + MQTT_INTERVAL;
+                    state->connectionState = WiFi_up_MQTT_down;
 
-    LOGERROR(F("Connecting MultiWifi..."));
-    WiFi.mode(WIFI_STA);
+                } else if (state->wifi_status != WL_CONNECTED && currentMillis > nextWiFiScan) {
+                    triedBssid->clear();
+                    WiFi.scanNetworks(true);
+                    state->connectionState = WiFi_scan_MQTT_down;
+                }
+
+                break;
+            }
+
+            case WiFi_scan_MQTT_down: {
+                if (!state->is_wifi_activated) {
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                scanResult = WiFi.scanComplete();
+
+                if (scanResult == WIFI_SCAN_RUNNING)
+                    break;
+
+                if (scanResult == 0) {
+                    WiFi.scanDelete();
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
 
 #if !USE_DHCP_IP
-    configWiFi(WM_STA_IPconfig);
+                configWiFi(WM_STA_IPconfig);
 #endif
 
-    status = wifiMulti.run();
+                int bestNetworkDb = INT_MIN;
+                uint8_t bestBSSID[6];
+                String bestSSID_pw = "";
+                String bestSSID = "";
 
-    if (status == WL_CONNECTED) {
-        LOGERROR0(F("WiFi connected. "));
-        LOGERROR3(F("SSID:"), WiFi.SSID(), F(",RSSI="), WiFi.RSSI());
-        LOGERROR3(F("Channel:"), WiFi.channel(), F(",IP address:"), WiFi.localIP());
-    } else LOGERROR3(F("WiFi not connected."), " ", "Status: ", (String) status);
+                int32_t bestChannel = 0;
 
-    return status;
+                for (int i = 0; i < scanResult; ++i) {
+                    String ssid_scan;
+                    int32_t rssi_scan;
+                    uint8_t sec_scan;
+                    uint8_t *BSSID_scan;
+                    int32_t chan_scan;
+                    WiFi.getNetworkInfo(i, ssid_scan, sec_scan, rssi_scan, BSSID_scan, chan_scan);
+
+                    // loop through config credentials
+                    for (auto &WiFi_Cred : WM_config.WiFi_Creds) {
+                        String config_ssid = WiFi_Cred.wifi_ssid;
+                        String config_passphrase = WiFi_Cred.wifi_pw;
+                        if (config_ssid == "")
+                            break;
+
+                        if (config_ssid == ssid_scan) {
+                            uint64_t bssidSetElement;
+                            memcpy(&bssidSetElement, BSSID_scan, 6);
+                            Serial.println("Found matching ssid: " + ssid_scan);
+
+                            // found best
+                            if (triedBssid->find(bssidSetElement) == triedBssid->end()
+                                && rssi_scan > bestNetworkDb
+                                && (sec_scan == WIFI_AUTH_OPEN || config_passphrase)) {
+                                bestNetworkDb = rssi_scan;
+                                bestChannel = chan_scan;
+                                memcpy(&bestBSSID, BSSID_scan, sizeof(bestBSSID));
+                                bestSSID_pw = config_passphrase;
+                                bestSSID = config_ssid;
+                            }
+                        }
+                    }
+
+                    // check wifi manager credentials
+                    if (Router_SSID == "")
+                        continue;
+
+                    if (Router_SSID == ssid_scan) {
+                        uint64_t bssidSetElement;
+                        memcpy(&bssidSetElement, BSSID_scan, 6);
+                        Serial.println("Found matching ssid: " + ssid_scan);
+
+                        // found best
+                        if (triedBssid->find(bssidSetElement) == triedBssid->end()
+                            && rssi_scan > bestNetworkDb
+                            && (sec_scan == WIFI_AUTH_OPEN || Router_Pass)) {
+                            bestNetworkDb = rssi_scan;
+                            bestChannel = chan_scan;
+                            memcpy(&bestBSSID, BSSID_scan, sizeof(bestBSSID));
+                            bestSSID_pw = Router_Pass;
+                            bestSSID = Router_SSID;
+                        }
+                    }
+                }
+
+                WiFi.scanDelete();
+
+                if (bestSSID == "") {
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    triedBssid->clear();
+                    state->connectionState = WiFi_down_MQTT_down;
+                    Serial.println("No SSID found to connect to.");
+
+                } else {
+                    Serial.println("Connecting to: " + bestSSID);
+                    WiFi.begin(bestSSID.c_str(), bestSSID_pw.c_str(), bestChannel, bestBSSID);
+                    uint64_t bssidSetElement;
+                    memcpy(&bssidSetElement, bestBSSID, 6);
+                    triedBssid->insert(bssidSetElement);
+                    nextMqttConnection = currentMillis + MQTT_INTERVAL;
+                    wifiConnectionPause = currentMillis + WIFI_CONNECT_TIMEOUT;
+                    state->connectionState = WiFi_starting_MQTT_down;
+                }
+                break;
+            }
+
+            case WiFi_starting_MQTT_down: {
+                if (!state->is_wifi_activated) {
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                // we need to wait for a result otherwise it will go to WiFi_scan_MQTT_down immediately
+                if (state->wifi_status != WL_CONNECTED && currentMillis > wifiConnectionPause) {
+                    state->connectionState = WiFi_scan_MQTT_down;
+                    break;
+                }
+
+                // if WiFi is up skip WiFi_up_MQTT_down
+                if (state->wifi_status == WL_CONNECTED && !mqtt.connected() && currentMillis > nextMqttConnection) {
+                    if ((String) state->mqttServer != "" && (String) state->mqttPort != "") {
+                        setMQTTServer(state);
+                        MQTTConnect(state);
+                        state->connectionState = WiFi_up_MQTT_starting;
+                    } else {
+                        nextMqttConnection = currentMillis + MQTT_INTERVAL;
+                        state->connectionState = WiFi_up_MQTT_down;
+                    }
+                }
+
+                break;
+            }
+
+            case WiFi_up_MQTT_down: {
+                if (!state->is_wifi_activated) {
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                if (state->wifi_status != WL_CONNECTED) {
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                if ((String) state->mqttServer == "" || (String) state->mqttPort == "")
+                    break;
+
+                if (!mqtt.connected() && currentMillis > nextMqttConnection) {
+                    setMQTTServer(state);
+                    MQTTConnect(state);
+                    state->connectionState = WiFi_up_MQTT_starting;
+                }
+
+                break;
+            }
+
+            case WiFi_up_MQTT_starting: {
+                if (!state->is_wifi_activated) {
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                if (state->wifi_status != WL_CONNECTED) {
+                    WiFi.disconnect(false, false);
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                if (mqtt.connected())
+                    state->connectionState = WiFi_up_MQTT_up;
+                else {
+                    nextMqttConnection = currentMillis + MQTT_INTERVAL;
+                    state->connectionState = WiFi_up_MQTT_down;
+                }
+
+                break;
+            }
+
+            case WiFi_up_MQTT_up: {
+                if (!state->is_wifi_activated) {
+                    nextWiFiScan = currentMillis + WIFI_SCAN_INTERVAL;
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                if (state->wifi_status != WL_CONNECTED) {
+                    WiFi.disconnect(false, false);
+                    mqtt.disconnect();
+                    state->connectionState = WiFi_down_MQTT_down;
+                    break;
+                }
+
+                if (!mqtt.connected()) {
+                    mqtt.disconnect();
+                    nextMqttConnection = currentMillis + MQTT_INTERVAL;
+                    state->connectionState = WiFi_up_MQTT_down;
+                    break;
+                }
+
+                if (currentMillis > nextMqttPublish || nextMqttPublish == 0) {
+                    if ((String) state->mqttTopic != "") {
+                        String co2Topic = (String) state->mqttTopic + (String) TOPIC_CO2;
+                        String humidityTopic = (String) state->mqttTopic + (String) TOPIC_HUMIDITY;
+                        String temperatureTopic = (String) state->mqttTopic + (String) TOPIC_TEMPERATURE;
+
+                        String co2 = (String) state->co2_ppm;
+                        String humidity = (String)((double) state->humidity_percent / 10);
+                        String temperature = (String)((double) state->temperature_celsius / 10);
+
+                        if (mqtt.publish((const char *) co2Topic.c_str(), (const char *) co2.c_str()))
+                            Serial.println("Published co2 to MQTT");
+
+                        if (mqtt.publish((const char *) humidityTopic.c_str(), (const char *) humidity.c_str()))
+                            Serial.println("Published humidity to MQTT");
+
+                        if (mqtt.publish((const char *) temperatureTopic.c_str(),
+                                         (const char *) temperature.c_str()))
+                            Serial.println("Published temperature to MQTT");
+                    }
+
+                    nextMqttPublish = currentMillis + MQTT_PUBLISH_INTERVAL;
+                }
+                break;
+            }
+        }
+    }
+
+    if (oldstate->connectionState != state->connectionState) {
+        Serial.println(
+                "connection state from " + String(oldstate->connectionState) + " to " + String(state->connectionState));
+    }
+
 }
 
 void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
 #if USE_CONFIGURABLE_DNS
     // Set static IP, Gateway, Subnetmask, DNS1 and DNS2. New in v1.0.5
-    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw, in_WM_STA_IPconfig._sta_static_sn,
+    WiFi.config(in_WM_STA_IPconfig._sta_static_ip, in_WM_STA_IPconfig._sta_static_gw,
+                in_WM_STA_IPconfig._sta_static_sn,
                 in_WM_STA_IPconfig._sta_static_dns1, in_WM_STA_IPconfig._sta_static_dns2);
 #else
     // Set static IP, Gateway, Subnetmask, Use auto DNS1 and DNS2.
@@ -430,10 +642,12 @@ void configWiFi(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
 }
 
 void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig) {
-    LOGERROR3(F("stationIP ="), in_WM_STA_IPconfig._sta_static_ip, ", gatewayIP =", in_WM_STA_IPconfig._sta_static_gw);
+    LOGERROR3(F("stationIP ="), in_WM_STA_IPconfig._sta_static_ip, ", gatewayIP =",
+              in_WM_STA_IPconfig._sta_static_gw);
     LOGERROR1(F("netMask ="), in_WM_STA_IPconfig._sta_static_sn);
 #if USE_CONFIGURABLE_DNS
-    LOGERROR3(F("dns1IP ="), in_WM_STA_IPconfig._sta_static_dns1, ", dns2IP =", in_WM_STA_IPconfig._sta_static_dns2);
+    LOGERROR3(F("dns1IP ="), in_WM_STA_IPconfig._sta_static_dns1, ", dns2IP =",
+              in_WM_STA_IPconfig._sta_static_dns2);
 #endif
 }
 
@@ -504,7 +718,6 @@ void saveMQTTConfig(struct state *state) {
 
 bool loadConfigData() {
     File file = SPIFFS.open(CONFIG_FILENAME, "r");
-    LOGERROR(F("LoadWiFiCfgFile "));
     memset(&WM_config, 0, sizeof(WM_config));
     memset(&WM_STA_IPconfig, 0, sizeof(WM_STA_IPconfig));
 
@@ -512,11 +725,9 @@ bool loadConfigData() {
         file.readBytes((char *) &WM_config, sizeof(WM_config));
         file.readBytes((char *) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
         file.close();
-        LOGERROR(F("OK"));
-        displayIPConfigStruct(WM_STA_IPconfig);
         return true;
     } else {
-        LOGERROR(F("failed"));
+        LOGERROR(F("config load failed"));
         return false;
     }
 }
@@ -526,8 +737,8 @@ void saveConfigData() {
     LOGERROR(F("SaveWiFiCfgFile "));
 
     if (file) {
-        file.write((uint8_t *) &WM_config, sizeof(WM_config));
-        file.write((uint8_t *) &WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
+        file.write((uint8_t * ) & WM_config, sizeof(WM_config));
+        file.write((uint8_t * ) & WM_STA_IPconfig, sizeof(WM_STA_IPconfig));
         file.close();
         LOGERROR(F("OK"));
     } else {
@@ -567,29 +778,18 @@ void handleNavigation(struct state *state) {
     }
 }
 
-void handleWiFi(struct state *oldstate, struct state *state) {
+void handleConfigPortal(struct state *oldstate, struct state *state) {
     if (state->is_wifi_activated)
         asyncWifiManager->loop();
 
-    if (!state->is_wifi_activated && state->wifi_status == WL_CONNECTED)
-        WiFi.disconnect(true, false);
-
     if (state->is_wifi_activated && state->wifi_status != WL_CONNECTED && !state->is_config_running) {
-        Router_SSID = asyncWifiManager->WiFi_SSID();
-        Router_Pass = asyncWifiManager->WiFi_Pass();
         bool shouldStartWiFiManager = true;
 
-        if (Router_SSID != "" && Router_Pass.length() >= MIN_AP_PASSWORD_SIZE) {
-            Serial.println("Got Self-Stored Credentials");
-            wifiMulti.addAP(Router_SSID.c_str(), Router_Pass.c_str());
+        if (Router_SSID != "" || WiFi.SSID() != "") {
             shouldStartWiFiManager = false;
         } else if (loadConfigData()) {
             for (int i = 0; i < NUM_WIFI_CREDENTIALS; i++) {
-                if ((String(WM_config.WiFi_Creds[i].wifi_ssid) != "") &&
-                    (strlen(WM_config.WiFi_Creds[i].wifi_pw) >= MIN_AP_PASSWORD_SIZE)) {
-
-                    Serial.println("Got stored credentials. SSID: " + (String) WM_config.WiFi_Creds[i].wifi_ssid);
-                    wifiMulti.addAP(WM_config.WiFi_Creds[i].wifi_ssid, WM_config.WiFi_Creds[i].wifi_pw);
+                if ((String) WM_config.WiFi_Creds[i].wifi_ssid != "") {
                     shouldStartWiFiManager = false;
                 }
             }
@@ -597,7 +797,11 @@ void handleWiFi(struct state *oldstate, struct state *state) {
 
         if (shouldStartWiFiManager) {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
-            asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
+            WiFi.begin("", "");
+            delay(1000);
+            asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(),
+                                                        (const char *) state->password,
+                                                        false);
         }
     }
 
@@ -612,7 +816,7 @@ void handleWiFi(struct state *oldstate, struct state *state) {
         state->is_requesting_reset = false;
 
         Serial.println("Starting Configuration Portal for reset.");
-        asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password);
+        asyncWifiManager->startConfigPortalModeless((const char *) ssid.c_str(), (const char *) state->password, false);
     }
 }
 
@@ -639,14 +843,7 @@ void configPortalCallback() {
     saveMQTTConfig(&state);
     setMQTTServer(&state);
 
-    if (state.mqttDevice != mqttDevice->getValue()) {
-        mqtt.disconnect();
-
-        if ((String) state.mqttUser != "" && (String) state.mqttPassword != "")
-            mqtt.connect(state.mqttDevice, state.mqttUser, state.mqttPassword);
-        else 
-            mqtt.connect(state.mqttDevice);
-    }
+    WiFi.mode(WIFI_STA); // close AP
 }
 
 void saveConfigPortalCredentials() {
@@ -666,30 +863,12 @@ void saveConfigPortalCredentials() {
             if (strlen(tempPW.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1)
                 strcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str());
             else
-                strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
+                strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(),
+                        sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
         }
 
         saveConfigData();
     }
-}
-
-void publishMQTT(struct state *state) {
-    String co2Topic = (String) state->mqttTopic + (String) TOPIC_CO2;
-    String humidityTopic = (String) state->mqttTopic + (String) TOPIC_HUMIDITY;
-    String temperatureTopic = (String) state->mqttTopic + (String) TOPIC_TEMPERATURE;
-
-    String co2 = (String) state->co2_ppm;
-    String humidity = (String) ((double) state->humidity_percent / 10);
-    String temperature = (String) ((double) state->temperature_celsius / 10);
-
-    if (mqtt.publish((const char *) co2Topic.c_str(), (const char *) co2.c_str()))
-        Serial.println("Published co2 to MQTT");
-
-    if (mqtt.publish((const char *) humidityTopic.c_str(), (const char *) humidity.c_str()))
-        Serial.println("Published humidity to MQTT");
-
-    if (mqtt.publish((const char *) temperatureTopic.c_str(), (const char *) temperature.c_str()))
-        Serial.println("Published temperature to MQTT");
 }
 
 void setMQTTServer(struct state *state) {
@@ -966,17 +1145,10 @@ void setPassword(struct state *state) {
     }
 }
 
-void updateWiFiState(struct state *oldstate, struct state *state) {
-    if (WiFi.status() == oldstate->wifi_status)
-        return;
-
-    state->wifi_status = WiFi.status();
-
-    Serial.println("WiFi Status changed from " + (String) oldstate->wifi_status + " to " + (String) state->wifi_status);
-}
-
 void updateWiFiInfo(struct state *oldstate, struct state *state) {
-    if (state->wifi_status != oldstate->wifi_status) {
+    if (state->is_config_running)
+        state->wifi_info = infoConfigPortalCredentials;
+    else if (state->wifi_status != oldstate->wifi_status) {
         if (state->wifi_status == WL_CONNECTED)
             state->wifi_info = infoWiFiConnected;
         else if (state->wifi_status == WL_CONNECT_FAILED)
@@ -986,9 +1158,6 @@ void updateWiFiInfo(struct state *oldstate, struct state *state) {
         else
             state->wifi_info = infoEmpty;
     }
-
-    if (state->is_config_running)
-        state->wifi_info = infoConfigPortalCredentials;
 
     if (!state->is_wifi_activated)
         state->wifi_info = infoEmpty;
@@ -1281,7 +1450,6 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->is_wifi_activated == oldstate->is_wifi_activated &&
         state->is_requesting_reset == oldstate->is_requesting_reset &&
-        state->wifi_status == oldstate->wifi_status &&
         state->wifi_info == oldstate->wifi_info &&
         state->menu_mode == oldstate->menu_mode)
         return;
@@ -1305,7 +1473,8 @@ void drawWiFiSettings(struct state *oldstate, struct state *state) {
     } else if (state->wifi_info == infoWiFiConnected) {
         String connectedTo = (String) WiFi.SSID();
         String connectedInfo =
-                "Connected: " + ((connectedTo.length() > 18) ? (connectedTo.substring(0, 15) + "...") : connectedTo);
+                "Connected: " +
+                ((connectedTo.length() > 18) ? (connectedTo.substring(0, 15) + "...") : connectedTo);
         String ipInfo = "Local IP : " + WiFi.localIP().toString();
         DisbuffBody.drawString(connectedInfo, 15, 90);
         DisbuffBody.drawString(ipInfo, 15, 110);
@@ -1332,7 +1501,7 @@ void drawMQTTSettings(struct state *oldstate, struct state *state) {
     if (state->display_sleep == oldstate->display_sleep &&
         state->is_mqtt_connected == oldstate->is_mqtt_connected &&
         strncmp(state->mqttServer, oldstate->mqttServer, sizeof(state->mqttServer) - 1) == 0 &&
-        strncmp(state->mqttPort, oldstate->mqttPort, sizeof(state->mqttPort) -1) == 0 &&
+        strncmp(state->mqttPort, oldstate->mqttPort, sizeof(state->mqttPort) - 1) == 0 &&
         strncmp(state->mqttDevice, oldstate->mqttDevice, sizeof(state->mqttDevice) - 1) == 0 &&
         state->menu_mode == oldstate->menu_mode)
         return;
@@ -1566,8 +1735,7 @@ void syncData(struct state *state) {
         if (fetchRemoteVersion(state) && setRtc(state)) {
             setTimeFromRtc();
             state->time_info = infoTimeSyncSuccess;
-        }
-        else
+        } else
             state->time_info = infoTimeSyncFailed;
         state->force_sync = false;
     } else if (state->is_sync_needed) {
