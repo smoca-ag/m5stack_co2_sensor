@@ -365,8 +365,11 @@ void handleWifiMqtt(struct state *oldstate, struct state *state) {
         switch (state->connectionState) {
             case WiFi_down_MQTT_down: {
                 if (!state->is_wifi_activated) {
-                    if (state->wifi_status == WL_CONNECTED)
+                    if (state->wifi_status == WL_CONNECTED) {
                         WiFi.disconnect(true, false);
+                        WiFi.mode(WIFI_OFF);
+                        esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
+                    }
 
                     if (mqtt.connected())
                         mqtt.disconnect();
@@ -485,6 +488,8 @@ void handleWifiMqtt(struct state *oldstate, struct state *state) {
 
                 } else {
                     Serial.println("Connecting to: " + bestSSID);
+                    esp_wifi_set_ps(WIFI_PS_NONE);
+                    WiFi.mode(WIFI_STA);
                     WiFi.begin(bestSSID.c_str(), bestSSID_pw.c_str(), bestChannel, bestBSSID);
                     uint64_t bssidSetElement;
                     memcpy(&bssidSetElement, bestBSSID, 6);
