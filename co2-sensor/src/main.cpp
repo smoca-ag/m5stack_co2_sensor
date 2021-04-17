@@ -1736,26 +1736,34 @@ void syncData(struct state *state) {
     if (state->wifi_status != WL_CONNECTED)
         return;
 
-    if (state->force_sync) {
-        if (fetchRemoteVersion(state) && setRtc(state)) {
-            setTimeFromRtc();
-            state->time_info = infoTimeSyncSuccess;
-        } else
-            state->time_info = infoTimeSyncFailed;
-        state->force_sync = false;
-    } else if (state->is_sync_needed) {
-        if (fetchRemoteVersion(state) && setRtc(state)) {
-            setTimeFromRtc();
-            state->time_info = infoTimeSyncSuccess;
-            state->next_time_sync = state->current_time;
+    if (!state->is_sync_needed && !state->force_sync) {
+        return;
+    }
+    fetchRemoteVersion(state);
+    bool time_synched = setRtc(state);
+
+    if (time_synched) {
+        setTimeFromRtc();
+        state->time_info = infoTimeSyncSuccess;
+    } else {
+        state->time_info = infoTimeSyncFailed;
+    }
+
+    if (state->is_sync_needed) {
+        state->next_time_sync = state->current_time;
+        if (time_synched) {
             state->next_time_sync.tm_mday++;
             state->next_time_sync.tm_hour = TIME_SYNC_HOUR;
             state->next_time_sync.tm_min = TIME_SYNC_MIN;
-        } else
-            state->time_info = infoTimeSyncFailed;
-
-        state->is_sync_needed = false;
+        } else {
+            state->next_time_sync.tm_hour++;
+            state->next_time_sync.tm_min = TIME_SYNC_MIN;
+        }
+        mktime(&(state->next_time_sync));
     }
+
+    state->is_sync_needed = false;
+    state->force_sync = false;
 }
 
 bool setRtc(struct state *state) {
