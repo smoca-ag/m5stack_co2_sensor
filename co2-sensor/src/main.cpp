@@ -1067,7 +1067,7 @@ void updateTime(struct state *state) {
     if (((cycle + 1) % target_fps) != 0) {
         return;
     }
-    if (!getLocalTime(&(state->current_time))) {
+    if (!getLocalTime(&(state->current_time), 5)) {
         Serial.println("Failed to obtain time");
     }
 }
@@ -1770,7 +1770,7 @@ bool setRtc(struct state *state) {
     configTime(0, 0, "pool.ntp.org");
 
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo)) {
+    if (!getLocalTime(&timeinfo), 5) {
         Serial.println("Failed to obtain time");
         return false;
     }
