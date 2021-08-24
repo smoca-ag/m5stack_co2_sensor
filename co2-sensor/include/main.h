@@ -109,7 +109,8 @@ enum menuMode {
     menuModeWiFiSettings,
     menuModeMQTTSettings,
     menuModeTimeSettings,
-    menuModeUpdateSettings
+    menuModeUpdateSettings,
+    menuModeRotationSettings
 };
 
 enum info {
@@ -172,6 +173,7 @@ struct state {
     char mqttUser[MQTT_USERNAME_LEN];
     char mqttPassword[MQTT_KEY_LEN];
     enum connectionState connectionState = WiFi_down_MQTT_down;
+    bool is_screen_rotated = false;
 };
 
 struct graph {
@@ -233,6 +235,8 @@ void handleFirmware(struct state *oldstate, struct state *state);
 
 bool fetchRemoteVersion(struct state *state);
 
+void updateScreenRotation(struct state *oldstate, struct state *state);
+
 void updateTouch(struct state *state);
 
 void updateTime(struct state *state);
@@ -278,6 +282,8 @@ void drawMQTTSettings(struct state *oldstate, struct state *state);
 void drawSyncSettings(struct state *oldstate, struct state *state);
 
 void drawUpdateSettings(struct state *oldstate, struct state *state);
+
+void drawRotationSettings(struct state *oldstate, struct state *state);
 
 void hideButtons();
 

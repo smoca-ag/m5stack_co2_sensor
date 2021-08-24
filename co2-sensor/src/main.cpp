@@ -44,6 +44,7 @@ Button toggleWiFiButton(15, 175, 130, 50, false, "OFF", offRed, onRed);
 Button resetWiFiButton(175, 175, 130, 50, false, "Reset", offCyan, onCyan);
 
 Button syncTimeButton(15, 175, 290, 50, false, "Sync Time", offCyan, onCyan);
+Button rotateScreenButton(15, 175, 290, 50, false, "Rotate", offCyan, onCyan);
 
 TFT_eSprite DisbuffHeader = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
@@ -96,6 +97,23 @@ void setup() {
     my_nan = sqrt(-1);
 
     M5.begin();
+
+    // Initialize SPIFFS
+    if (!SPIFFS.begin(true))
+    {
+        Serial.println("An Error has occurred while mounting SPIFFS");
+        return;
+    }
+
+    loadStateFile();
+    if (state.is_screen_rotated)
+    {
+        M5.BtnA.set(10, -40, 110, 40, false);
+        M5.BtnB.set(130, -40, 70, 40, false);
+        M5.BtnC.set(230, -40, 80, 40, false);
+        M5.Lcd.setRotation(3);
+    }
+
     M5.Lcd.setSwapBytes(true);
     M5.Lcd.pushImage(96, 96, 128, 32, smoca_logo);
 
@@ -106,13 +124,6 @@ void setup() {
     ssid.toUpperCase();
     mqtt.setBufferSize(512);
 
-    // Initialize SPIFFS
-    if (!SPIFFS.begin(true)) {
-        Serial.println("An Error has occurred while mounting SPIFFS");
-        return;
-    }
-
-    loadStateFile();
     loadMQTTConfig();
     setPassword(&state);
     setDisplayPower(true);
@@ -164,6 +175,7 @@ void loop() {
 
     handleWifiMqtt(&oldstate, &state);
 
+    updateScreenRotation(&oldstate, &state);
     drawScreen(&oldstate, &state);
 
     handleConfigPortal(&oldstate, &state);
@@ -992,18 +1004,43 @@ bool fetchRemoteVersion(struct state *state) {
     return false;
 }
 
-void updateTouch(struct state *state) {
-    switch (state->menu_mode) {
-        case menuModeGraphs:
-            if (batteryButton.wasPressed())
-                state->graph_mode = graphModeBatteryMah;
-            if (co2Button.wasPressed())
-                state->graph_mode = graphModeCo2;
-            if (midLeftButton.wasPressed())
-                state->graph_mode = graphModeTemperature;
-            if (midRightButton.wasPressed())
-                state->graph_mode = graphModeHumidity;
-            break;
+void updateScreenRotation(struct state *oldstate, struct state *state)
+{
+    if (state->is_screen_rotated == oldstate->is_screen_rotated)
+        return;
+
+    if (state->is_screen_rotated)
+    {
+        M5.BtnA.set(10, -40, 110, 40, false);
+        M5.BtnB.set(130, -40, 70, 40, false);
+        M5.BtnC.set(230, -40, 80, 40, false);
+        M5.Lcd.clearDisplay();
+        M5.Lcd.setRotation(3);
+    }
+    else
+    {
+        M5.BtnA.set(10, 240, 110, 40, true);
+        M5.BtnB.set(130, 240, 70, 40, true);
+        M5.BtnC.set(230, 240, 80, 40, true);
+        M5.Lcd.clearDisplay();
+        M5.Lcd.setRotation(1);
+    }
+}
+
+void updateTouch(struct state *state)
+{
+    switch (state->menu_mode)
+    {
+    case menuModeGraphs:
+        if (batteryButton.wasPressed())
+            state->graph_mode = graphModeBatteryMah;
+        if (co2Button.wasPressed())
+            state->graph_mode = graphModeCo2;
+        if (midLeftButton.wasPressed())
+            state->graph_mode = graphModeTemperature;
+        if (midRightButton.wasPressed())
+            state->graph_mode = graphModeHumidity;
+        break;
 
         case menuModeCalibrationSettings:
             if (midLeftButton.wasPressed())
@@ -1045,6 +1082,10 @@ void updateTouch(struct state *state) {
             if (syncTimeButton.wasPressed())
                 state->is_requesting_update = true;
             break;
+
+    case menuModeRotationSettings:
+        if (rotateScreenButton.wasPressed())
+            state->is_screen_rotated = !state->is_screen_rotated;
 
         default:
             break;
@@ -1251,6 +1292,11 @@ void drawScreen(struct state *oldstate, struct state *state) {
             state->time_info = infoEmpty;
             clearScreen(oldstate, state);
             drawUpdateSettings(oldstate, state);
+        }
+        else if (state->menu_mode == menuModeRotationSettings)
+        {
+            clearScreen(oldstate, state);
+            drawRotationSettings(oldstate, state);
         }
     }
 }
@@ -1634,8 +1680,30 @@ void drawUpdateSettings(struct state *oldstate, struct state *state) {
     }
 }
 
-void hideButtons() {
-    for (Button *button : Button::instances) {
+void drawRotationSettings(struct state *oldstate, struct state *state)
+{
+    if (state->display_sleep == oldstate->display_sleep &&
+        state->is_screen_rotated == oldstate->is_screen_rotated &&
+        state->menu_mode == oldstate->menu_mode)
+        return;
+
+    DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+    DisbuffBody.setFreeFont(&FreeMonoBold18pt7b);
+    DisbuffBody.setTextColor(WHITE);
+    DisbuffBody.setTextSize(2);
+    DisbuffBody.drawString("Rotate", 25, 10);
+
+    DisbuffBody.pushSprite(0, 26);
+
+    rotateScreenButton.setLabel("Rotate Screen");
+    rotateScreenButton.draw();
+}
+
+void hideButtons()
+{
+    for (Button *button : Button::instances)
+    {
         if (button->getName() == M5.BtnA.getName() ||
             button->getName() == M5.BtnB.getName() ||
             button->getName() == M5.BtnC.getName() ||
