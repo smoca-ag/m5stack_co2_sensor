@@ -1629,6 +1629,7 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state)
 
     DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
 
+    DisbuffBody.setTextSize(1);
     DisbuffBody.setFreeFont(&FreeMono18pt7b);
     DisbuffBody.setTextColor(WHITE);
     DisbuffBody.drawString("Calibration: ", 45, 5);
