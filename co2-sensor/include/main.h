@@ -80,21 +80,25 @@
 #include <smoca_logo.h>
 
 #include <set>
-typedef struct {
+typedef struct
+{
     char wifi_ssid[MAX_SSID_LEN];
     char wifi_pw[MAX_PW_LEN];
 } WiFiCredentials;
 
-typedef struct {
+typedef struct
+{
     String wifi_ssid;
     String wifi_pw;
 } WiFiCredentialsString;
 
-typedef struct {
+typedef struct
+{
     WiFiCredentials WiFi_Creds[NUM_WIFI_CREDENTIALS];
 } WM_Config;
 
-enum graphMode {
+enum graphMode
+{
     graphModeCo2,
     graphModeTemperature,
     graphModeHumidity,
@@ -102,7 +106,8 @@ enum graphMode {
     graphModeLogo
 };
 
-enum menuMode {
+enum menuMode
+{
     menuModeGraphs,
     menuModeCalibrationSettings,
     menuModeCalibrationAlert,
@@ -113,7 +118,8 @@ enum menuMode {
     menuModeRotationSettings
 };
 
-enum info {
+enum info
+{
     infoCalSuccess,
     infoConfigPortalCredentials,
     infoWiFiConnected,
@@ -125,7 +131,8 @@ enum info {
     infoEmpty
 };
 
-enum connectionState {
+enum connectionState
+{
     WiFi_down_MQTT_down = 0,
     WiFi_scan_MQTT_down = 1,
     WiFi_starting_MQTT_down = 2,
@@ -134,7 +141,8 @@ enum connectionState {
     WiFi_up_MQTT_up = 5
 };
 
-struct state {
+struct state
+{
     int co2_ppm;
     int temperature_celsius;
     int humidity_percent;
@@ -176,7 +184,8 @@ struct state {
     bool is_screen_rotated = false;
 };
 
-struct graph {
+struct graph
+{
     float co2[GRAPH_UNITS];
     float temperature[GRAPH_UNITS];
     float humidity[GRAPH_UNITS];
