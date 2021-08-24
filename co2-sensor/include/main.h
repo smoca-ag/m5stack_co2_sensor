@@ -1,4 +1,4 @@
-#define VERSION_NUMBER "1.1.5"
+#define VERSION_NUMBER "1.1.6"
 #define VERSION_NUMBER_LEN 8
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
 #define REMOTE_VERSION_FILE "/version.json"
