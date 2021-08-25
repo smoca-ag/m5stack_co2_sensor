@@ -19,11 +19,11 @@ The following hardware is needed:
 
 | description                 | cost     | link                                                                                                                             |
 | --------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Sensirion SCD30             | 54 USD   | https://www.digikey.com/en/products/detail/sensirion-ag/SCD30/8445334                                                            |
-| M5 Stack Core2              | 39.9 USD | https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/K010/13151126?s=N4IgTCBcDaILYFYDOAXAhgYwNYAIMHsAnAUwgF0BfIA |
-| M5 Stack Proto Board        | 2.95 USD | https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/M001/10492145                                               |
-| M5 Stack PLC Base           | 9.95 USD | https://m5stack.com/collections/m5-base/products/plc-proto-industrial-board-module                                               |
-| M5 Stack Battery (optional) | 7.95 USD | https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/M002/10492127                                               |
+| Sensirion SCD30             | 54 USD   | https://www.digikey.com/en/products/detail/sensirion-ag/SCD30/8445334<br>Switzerland: https://www.bastelgarage.ch/co2-sensor-scd30-sensirion                                                            |
+| M5 Stack Core2              | 39.9 USD | https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/K010/13151126?s=N4IgTCBcDaILYFYDOAXAhgYwNYAIMHsAnAUwgF0BfIA<br>Switzerland: https://www.bastelgarage.ch/m5stack-core2-esp32-iot-entwicklungs-kit |
+| M5 Stack Proto Board        | 2.95 USD | https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/M001/10492145<br>Switzerland: https://www.bastelgarage.ch/m5stack-core-development-proto-board                                               |
+| M5 Stack PLC Base           | 9.95 USD | https://m5stack.com/collections/m5-base/products/plc-proto-industrial-board-module<br>Switzerland: https://www.bastelgarage.ch/m5stack-plc-proto-base-industrial-board                                               |
+| M5 Stack Battery (optional) | 7.95 USD | https://www.digikey.com/en/products/detail/m5stack-technology-co-ltd/M002/10492127<br>Switzerland: https://www.bastelgarage.ch/m5stack-battery-module-700mah-fur-esp32-core                                               |
 
 Note: The optional battery increases the battery operation time from 6 to 10 hours.
 
