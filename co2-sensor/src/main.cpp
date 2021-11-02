@@ -16,6 +16,7 @@
  */
 
 #include <main.h>
+#include <lwip/apps/snmp.h>
 
 struct state state;
 struct graph graph;
@@ -94,6 +95,8 @@ float my_nan;
 
 void setup()
 {
+    snmp_init();
+
     Serial.println("Start Setup.");
     my_nan = sqrt(-1);
 
