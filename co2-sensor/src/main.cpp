@@ -17,6 +17,11 @@
 
 #include <main.h>
 #include <lwip/apps/snmp.h>
+#include <co2Sensor-mib.h>
+
+static const struct snmp_mib *mibs[] = {
+    &co2sensormib
+};
 
 struct state state;
 struct graph graph;
@@ -95,8 +100,6 @@ float my_nan;
 
 void setup()
 {
-    snmp_init();
-
     Serial.println("Start Setup.");
     my_nan = sqrt(-1);
 
@@ -155,6 +158,11 @@ void setup()
     initAirSensor();
     initAsyncWifiManager(&state);
     initSTAIPConfigStruct(WM_STA_IPconfig);
+
+    snmp_set_mibs(mibs, LWIP_ARRAYSIZE(mibs));
+    // const struct snmp_obj_id device_enterprise_oid = {8, {1,3,6,1,4,1,58049,1}};
+    // snmp_set_device_enterprise_oid(&device_enterprise_oid);
+    snmp_init();
 
     cycle = 0;
     Serial.print(state.is_wifi_activated ? "WiFi on" : "WiFi off");
