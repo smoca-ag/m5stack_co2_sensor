@@ -1,0 +1,102 @@
+CO2SENSOR-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, enterprises FROM SNMPv2-SMI
+    DisplayString FROM SNMPv2-TC
+;
+
+co2SensorMIB MODULE-IDENTITY
+    LAST-UPDATED "202111011710Z"
+    ORGANIZATION "www.smoca.ch"
+    CONTACT-INFO 
+        "email: info@smoca.ch"
+    DESCRIPTION
+	"MIB module that houses the measurements that the co2 sensor makes."
+    REVISION     "202111011710Z"
+    DESCRIPTION
+	"First draft"
+    ::= { enterprises 58049 1 }
+
+
+-- A table of the sensors a co2Sensor houses
+c2sSensorTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF C2sSensorEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    ::= { co2SensorMIB 1 }
+
+c2sSensorEntry OBJECT-TYPE
+    SYNTAX C2sSensorEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    INDEX { c2sSensorId }
+    ::= { c2sSensorTable 1 }
+
+C2sSensorEntry ::=
+    SEQUENCE {
+        c2sSensorId Integer32,
+        c2sSensorName DisplayString
+    }
+
+c2sSensorId OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    ::= { c2sSensorEntry 1 }
+
+c2sSensorName OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    ::= { c2sSensorEntry 2 }
+
+
+-- A table of co2 sensor measurements for each co2 sensor
+c2sMeasurementTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF C2sMeasurementEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    ::= { co2SensorMIB 2 }
+
+c2sMeasurementEntry OBJECT-TYPE
+    SYNTAX C2sMeasurementEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    INDEX { c2sSensorId }
+    ::= { c2sMeasurementTable 1 }
+
+C2sMeasurementEntry ::= 
+    SEQUENCE {
+        c2sSensorId Integer32,
+        c2sMeasurementType Integer32,
+        c2sMeasurementValue Integer32
+    }
+
+c2sMeasurementType OBJECT-TYPE
+    SYNTAX Integer32 { co2PPM(1), celsius(2), humidity(3), batteryVoltage(4), batteryCurrent(5) }
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    ::= { c2sMeasurementEntry 1 }
+
+c2sMeasurementValue OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "ASDF"
+    ::= { c2sMeasurementEntry 2 }
+END

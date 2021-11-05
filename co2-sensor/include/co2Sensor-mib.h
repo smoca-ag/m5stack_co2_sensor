@@ -16,6 +16,15 @@ extern "C" {
 
 extern const struct snmp_mib co2sensormib;
 
+#define CO2_PPM_MEASUREMENT 1
+#define TEMPERATURE_MEASUREMENT 2
+#define HUMIDITY_MEASUREMENT 3
+#define BATTERY_VOLTAGE_MEASUREMENT 4
+#define BATTERY_CURRENT_MEASUREMENT 5
+
+extern int get_measurement(u8_t);
+extern void print_serial(char* message);
+
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */

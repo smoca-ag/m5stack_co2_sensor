@@ -1,0 +1,27 @@
+{
+    "files.associations": {
+        "main.h": "c",
+        "regex": "cpp",
+        "wifi.h": "c",
+        "array": "cpp",
+        "*.tcc": "cpp",
+        "bitset": "cpp",
+        "deque": "cpp",
+        "string": "cpp",
+        "vector": "cpp",
+        "iterator": "cpp",
+        "functional": "cpp",
+        "initializer_list": "cpp",
+        "iomanip": "cpp",
+        "istream": "cpp",
+        "ostream": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "random": "cpp",
+        "fstream": "cpp",
+        "sstream": "cpp",
+        "streambuf": "cpp"
+    }
+}
