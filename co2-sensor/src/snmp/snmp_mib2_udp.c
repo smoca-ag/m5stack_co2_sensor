@@ -62,29 +62,29 @@ udp_get_value(struct snmp_node_instance* instance, void* value)
 {
   u32_t *uint_ptr = (u32_t*)value;
 
-  switch (instance->node->oid) {
-  case 1: /* udpInDatagrams */
-    *uint_ptr = STATS_GET(mib2.udpindatagrams);
-    return sizeof(*uint_ptr);
-  case 2: /* udpNoPorts */
-    *uint_ptr = STATS_GET(mib2.udpnoports);
-    return sizeof(*uint_ptr);
-  case 3: /* udpInErrors */
-    *uint_ptr = STATS_GET(mib2.udpinerrors);
-    return sizeof(*uint_ptr);
-  case 4: /* udpOutDatagrams */
-    *uint_ptr = STATS_GET(mib2.udpoutdatagrams);
-    return sizeof(*uint_ptr);
-  case 8: /* udpHCInDatagrams */
-    memset(value, 0, 2*sizeof(u32_t)); /* not supported */
-    return 2*sizeof(u32_t);
-  case 9: /* udpHCOutDatagrams */
-    memset(value, 0, 2*sizeof(u32_t)); /* not supported */
-    return 2*sizeof(u32_t);
-  default:
-    LWIP_DEBUGF(SNMP_MIB_DEBUG,("udp_get_value(): unknown id: %"S32_F"\n", instance->node->oid));
-    break;
-  }
+  // switch (instance->node->oid) {
+  // case 1: /* udpInDatagrams */
+  //   *uint_ptr = STATS_GET(mib2.udpindatagrams);
+  //   return sizeof(*uint_ptr);
+  // case 2: /* udpNoPorts */
+  //   *uint_ptr = STATS_GET(mib2.udpnoports);
+  //   return sizeof(*uint_ptr);
+  // case 3: /* udpInErrors */
+  //   *uint_ptr = STATS_GET(mib2.udpinerrors);
+  //   return sizeof(*uint_ptr);
+  // case 4: /* udpOutDatagrams */
+  //   *uint_ptr = STATS_GET(mib2.udpoutdatagrams);
+  //   return sizeof(*uint_ptr);
+  // case 8: /* udpHCInDatagrams */
+  //   memset(value, 0, 2*sizeof(u32_t)); /* not supported */
+  //   return 2*sizeof(u32_t);
+  // case 9: /* udpHCOutDatagrams */
+  //   memset(value, 0, 2*sizeof(u32_t)); /* not supported */
+  //   return 2*sizeof(u32_t);
+  // default:
+  //   LWIP_DEBUGF(SNMP_MIB_DEBUG,("udp_get_value(): unknown id: %"S32_F"\n", instance->node->oid));
+  //   break;
+  // }
 
   return 0;
 }

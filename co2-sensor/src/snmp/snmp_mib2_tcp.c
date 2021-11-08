@@ -64,74 +64,74 @@ tcp_get_value(struct snmp_node_instance* instance, void* value)
   u32_t *uint_ptr = (u32_t*)value;
   s32_t *sint_ptr = (s32_t*)value;
 
-  switch (instance->node->oid) {
-  case 1: /* tcpRtoAlgorithm, vanj(4) */
-    *sint_ptr = 4;
-    return sizeof(*sint_ptr);
-  case 2: /* tcpRtoMin */
-    /* @todo not the actual value, a guess,
-        needs to be calculated */
-    *sint_ptr = 1000;
-    return sizeof(*sint_ptr);
-  case 3: /* tcpRtoMax */
-    /* @todo not the actual value, a guess,
-        needs to be calculated */
-    *sint_ptr = 60000;
-    return sizeof(*sint_ptr);
-  case 4: /* tcpMaxConn */
-    *sint_ptr = MEMP_NUM_TCP_PCB;
-    return sizeof(*sint_ptr);
-  case 5: /* tcpActiveOpens */
-    *uint_ptr = STATS_GET(mib2.tcpactiveopens);
-    return sizeof(*uint_ptr);
-  case 6: /* tcpPassiveOpens */
-    *uint_ptr = STATS_GET(mib2.tcppassiveopens);
-    return sizeof(*uint_ptr);
-  case 7: /* tcpAttemptFails */
-    *uint_ptr = STATS_GET(mib2.tcpattemptfails);
-    return sizeof(*uint_ptr);
-  case 8: /* tcpEstabResets */
-    *uint_ptr = STATS_GET(mib2.tcpestabresets);
-    return sizeof(*uint_ptr);
-  case 9: /* tcpCurrEstab */
-    {
-      u16_t tcpcurrestab = 0;
-      struct tcp_pcb *pcb = tcp_active_pcbs;
-      while (pcb != NULL) {
-        if ((pcb->state == ESTABLISHED) ||
-            (pcb->state == CLOSE_WAIT)) {
-          tcpcurrestab++;
-        }
-        pcb = pcb->next;
-      }
-      *uint_ptr = tcpcurrestab;
-    }
-    return sizeof(*uint_ptr);
-  case 10: /* tcpInSegs */
-    *uint_ptr = STATS_GET(mib2.tcpinsegs);
-    return sizeof(*uint_ptr);
-  case 11: /* tcpOutSegs */
-    *uint_ptr = STATS_GET(mib2.tcpoutsegs);
-    return sizeof(*uint_ptr);
-  case 12: /* tcpRetransSegs */
-    *uint_ptr = STATS_GET(mib2.tcpretranssegs);
-    return sizeof(*uint_ptr);
-  case 14: /* tcpInErrs */
-    *uint_ptr = STATS_GET(mib2.tcpinerrs);
-    return sizeof(*uint_ptr);
-  case 15: /* tcpOutRsts */
-    *uint_ptr = STATS_GET(mib2.tcpoutrsts);
-    return sizeof(*uint_ptr);
-  case 17: /* tcpHCInSegs */
-    memset(value, 0, 2*sizeof(u32_t)); /* not supported */
-    return 2*sizeof(u32_t);
-  case 18: /* tcpHCOutSegs */
-    memset(value, 0, 2*sizeof(u32_t)); /* not supported */
-    return 2*sizeof(u32_t);
-  default:
-    LWIP_DEBUGF(SNMP_MIB_DEBUG,("tcp_get_value(): unknown id: %"S32_F"\n", instance->node->oid));
-    break;
-  }
+  // switch (instance->node->oid) {
+  // case 1: /* tcpRtoAlgorithm, vanj(4) */
+  //   *sint_ptr = 4;
+  //   return sizeof(*sint_ptr);
+  // case 2: /* tcpRtoMin */
+  //   /* @todo not the actual value, a guess,
+  //       needs to be calculated */
+  //   *sint_ptr = 1000;
+  //   return sizeof(*sint_ptr);
+  // case 3: /* tcpRtoMax */
+  //   /* @todo not the actual value, a guess,
+  //       needs to be calculated */
+  //   *sint_ptr = 60000;
+  //   return sizeof(*sint_ptr);
+  // case 4: /* tcpMaxConn */
+  //   *sint_ptr = MEMP_NUM_TCP_PCB;
+  //   return sizeof(*sint_ptr);
+  // case 5: /* tcpActiveOpens */
+  //   *uint_ptr = STATS_GET(mib2.tcpactiveopens);
+  //   return sizeof(*uint_ptr);
+  // case 6: /* tcpPassiveOpens */
+  //   *uint_ptr = STATS_GET(mib2.tcppassiveopens);
+  //   return sizeof(*uint_ptr);
+  // case 7: /* tcpAttemptFails */
+  //   *uint_ptr = STATS_GET(mib2.tcpattemptfails);
+  //   return sizeof(*uint_ptr);
+  // case 8: /* tcpEstabResets */
+  //   *uint_ptr = STATS_GET(mib2.tcpestabresets);
+  //   return sizeof(*uint_ptr);
+  // case 9: /* tcpCurrEstab */
+  //   {
+  //     u16_t tcpcurrestab = 0;
+  //     struct tcp_pcb *pcb = tcp_active_pcbs;
+  //     while (pcb != NULL) {
+  //       if ((pcb->state == ESTABLISHED) ||
+  //           (pcb->state == CLOSE_WAIT)) {
+  //         tcpcurrestab++;
+  //       }
+  //       pcb = pcb->next;
+  //     }
+  //     *uint_ptr = tcpcurrestab;
+  //   }
+  //   return sizeof(*uint_ptr);
+  // case 10: /* tcpInSegs */
+  //   *uint_ptr = STATS_GET(mib2.tcpinsegs);
+  //   return sizeof(*uint_ptr);
+  // case 11: /* tcpOutSegs */
+  //   *uint_ptr = STATS_GET(mib2.tcpoutsegs);
+  //   return sizeof(*uint_ptr);
+  // case 12: /* tcpRetransSegs */
+  //   *uint_ptr = STATS_GET(mib2.tcpretranssegs);
+  //   return sizeof(*uint_ptr);
+  // case 14: /* tcpInErrs */
+  //   *uint_ptr = STATS_GET(mib2.tcpinerrs);
+  //   return sizeof(*uint_ptr);
+  // case 15: /* tcpOutRsts */
+  //   *uint_ptr = STATS_GET(mib2.tcpoutrsts);
+  //   return sizeof(*uint_ptr);
+  // case 17: /* tcpHCInSegs */
+  //   memset(value, 0, 2*sizeof(u32_t)); /* not supported */
+  //   return 2*sizeof(u32_t);
+  // case 18: /* tcpHCOutSegs */
+  //   memset(value, 0, 2*sizeof(u32_t)); /* not supported */
+  //   return 2*sizeof(u32_t);
+  // default:
+  //   LWIP_DEBUGF(SNMP_MIB_DEBUG,("tcp_get_value(): unknown id: %"S32_F"\n", instance->node->oid));
+  //   break;
+  // }
 
   return 0;
 }

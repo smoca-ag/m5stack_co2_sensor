@@ -22,7 +22,7 @@ extern const struct snmp_mib co2sensormib;
 #define BATTERY_VOLTAGE_MEASUREMENT 4
 #define BATTERY_CURRENT_MEASUREMENT 5
 
-extern int get_measurement(u8_t);
+extern int get_measurement(u32_t, u32_t);
 extern void print_serial(char* message);
 
 #ifdef __cplusplus

@@ -17,7 +17,6 @@
 
 #include <main.h>
 #include <lwip/apps/snmp.h>
-#include <lwip/apps/snmp_mib2.h>
 #include <co2Sensor-mib.h>
 
 static const struct snmp_mib *mibs[] = {
@@ -169,35 +168,25 @@ void setup()
     #endif /* LWIP_SNMP */
 
     cycle = 0;
-    //Serial.print(state.is_wifi_activated ? "WiFi on" : "WiFi off");
-    //Serial.println(" status: " + (String)WiFi.status());
+    Serial.print(state.is_wifi_activated ? "WiFi on" : "WiFi off");
+    Serial.println(" status: " + (String)WiFi.status());
 }
 
-extern "C" int get_measurement(u8_t measurement_type) {
-    //Serial.print(measurement_type);
+extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type) {
     switch(measurement_type) {
         case CO2_PPM_MEASUREMENT:
-            //Serial.print("CO2_PPM_MEASUREMENT");
             return state.co2_ppm;
         case TEMPERATURE_MEASUREMENT:
-            //Serial.print("TEMPERATURE_MEASUREMENT");
             return state.temperature_celsius;
         case HUMIDITY_MEASUREMENT:
-            //Serial.print("HUMIDITY_MEASUREMENT");
             return state.humidity_percent;
         case BATTERY_VOLTAGE_MEASUREMENT:
-            //Serial.print("BATTERY_VOLTAGE_MEASUREMENT");
             return state.battery_voltage;
         case BATTERY_CURRENT_MEASUREMENT:
-            //Serial.print("BATTERY_CURRENT_MEASUREMENT");
             return state.battery_current;
         default:
             return 0;
     }
-}
-
-extern "C" void print_serial(char* message) {
-    Serial.println(message);
 }
 
 void loop()

@@ -11,7 +11,7 @@ co2SensorMIB MODULE-IDENTITY
     CONTACT-INFO 
         "email: info@smoca.ch"
     DESCRIPTION
-	"MIB module that houses the measurements that the co2 sensor makes."
+	"MIB module that houses the measurements that the co2 sensor makes"
     REVISION     "202111011710Z"
     DESCRIPTION
 	"First draft"
@@ -24,7 +24,7 @@ c2sSensorTable OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "A table of sensors that the device houses"
     ::= { co2SensorMIB 1 }
 
 c2sSensorEntry OBJECT-TYPE
@@ -32,7 +32,7 @@ c2sSensorEntry OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "A row describing a sensor"
     INDEX { c2sSensorId }
     ::= { c2sSensorTable 1 }
 
@@ -47,7 +47,7 @@ c2sSensorId OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "Id of a sensor"
     ::= { c2sSensorEntry 1 }
 
 c2sSensorName OBJECT-TYPE
@@ -55,7 +55,7 @@ c2sSensorName OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "Name of a sensor"
     ::= { c2sSensorEntry 2 }
 
 
@@ -65,7 +65,7 @@ c2sMeasurementTable OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "A table that houses the measurements the sensors make."
     ::= { co2SensorMIB 2 }
 
 c2sMeasurementEntry OBJECT-TYPE
@@ -73,7 +73,7 @@ c2sMeasurementEntry OBJECT-TYPE
     MAX-ACCESS not-accessible
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "A row containing the sensor id, measurement type and value of a measurement"
     INDEX { c2sSensorId }
     ::= { c2sMeasurementTable 1 }
 
@@ -89,7 +89,7 @@ c2sMeasurementType OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "Type of a measurement a sensor makes"
     ::= { c2sMeasurementEntry 1 }
 
 c2sMeasurementValue OBJECT-TYPE
@@ -97,6 +97,6 @@ c2sMeasurementValue OBJECT-TYPE
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "ASDF"
+        "Value of a measurement a sensor makes"
     ::= { c2sMeasurementEntry 2 }
 END

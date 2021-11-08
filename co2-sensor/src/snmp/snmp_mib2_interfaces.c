@@ -167,112 +167,112 @@ interfaces_Table_get_value(struct snmp_node_instance* instance, void* value)
   s32_t* value_s32 = (s32_t*)value;
   u16_t value_len;
 
-  switch (SNMP_TABLE_GET_COLUMN_FROM_OID(instance->instance_oid.id))
-  {
-  case 1: /* ifIndex */
-    *value_s32 = netif_to_num(netif);
-    value_len = sizeof(*value_s32);
-    break;
-  case 2: /* ifDescr */
-    value_len = sizeof(netif->name);
-    MEMCPY(value, netif->name, value_len);
-    break;
-  case 3: /* ifType */
-    *value_s32 = netif->link_type;
-    value_len = sizeof(*value_s32);
-    break;
-  case 4: /* ifMtu */
-    *value_s32 = netif->mtu;
-    value_len = sizeof(*value_s32);
-    break;
-  case 5: /* ifSpeed */
-    *value_u32 = netif->link_speed;
-    value_len = sizeof(*value_u32);
-    break;
-  case 6: /* ifPhysAddress */
-    value_len = sizeof(netif->hwaddr);
-    MEMCPY(value, &netif->hwaddr, value_len);
-    break;
-  case 7: /* ifAdminStatus */
-    if (netif_is_up(netif)) {
-      *value_s32 = iftable_ifOperStatus_up;
-    } else {
-      *value_s32 = iftable_ifOperStatus_down;
-    }
-    value_len = sizeof(*value_s32);
-    break;
-  case 8: /* ifOperStatus */
-    if (netif_is_up(netif)) {
-      if (netif_is_link_up(netif)) {
-        *value_s32 = iftable_ifAdminStatus_up;
-      } else {
-        *value_s32 = iftable_ifAdminStatus_lowerLayerDown;
-      }
-    } else {
-      *value_s32 = iftable_ifAdminStatus_down;
-    }
-    value_len = sizeof(*value_s32);
-    break;
-  case 9: /* ifLastChange */
-    *value_u32 = netif->ts;
-    value_len = sizeof(*value_u32);
-    break;
-  case 10: /* ifInOctets */
-    *value_u32 = netif->mib2_counters.ifinoctets;
-    value_len = sizeof(*value_u32);
-    break;
-  case 11: /* ifInUcastPkts */
-    *value_u32 = netif->mib2_counters.ifinucastpkts;
-    value_len = sizeof(*value_u32);
-    break;
-  case 12: /* ifInNUcastPkts */
-    *value_u32 = netif->mib2_counters.ifinnucastpkts;
-    value_len = sizeof(*value_u32);
-    break;
-  case 13: /* ifInDiscards */
-    *value_u32 = netif->mib2_counters.ifindiscards;
-    value_len = sizeof(*value_u32);
-    break;
-  case 14: /* ifInErrors */
-    *value_u32 = netif->mib2_counters.ifinerrors;
-    value_len = sizeof(*value_u32);
-    break;
-  case 15: /* ifInUnkownProtos */
-    *value_u32 = netif->mib2_counters.ifinunknownprotos;
-    value_len = sizeof(*value_u32);
-    break;
-  case 16: /* ifOutOctets */
-    *value_u32 = netif->mib2_counters.ifoutoctets;
-    value_len = sizeof(*value_u32);
-    break;
-  case 17: /* ifOutUcastPkts */
-    *value_u32 = netif->mib2_counters.ifoutucastpkts;
-    value_len = sizeof(*value_u32);
-    break;
-  case 18: /* ifOutNUcastPkts */
-    *value_u32 = netif->mib2_counters.ifoutnucastpkts;
-    value_len = sizeof(*value_u32);
-    break;
-  case 19: /* ifOutDiscarts */
-    *value_u32 = netif->mib2_counters.ifoutdiscards;
-    value_len = sizeof(*value_u32);
-    break;
-  case 20: /* ifOutErrors */
-    *value_u32 = netif->mib2_counters.ifouterrors;
-    value_len = sizeof(*value_u32);
-    break;
-  case 21: /* ifOutQLen */
-    *value_u32 = iftable_ifOutQLen;
-    value_len = sizeof(*value_u32);
-    break;
-  /** @note returning zeroDotZero (0.0) no media specific MIB support */
-  case 22: /* ifSpecific */
-    value_len = snmp_zero_dot_zero.len * sizeof(u32_t);
-    MEMCPY(value, snmp_zero_dot_zero.id, value_len);
-    break;
-  default:
-    return 0;
-  }
+  // switch (SNMP_TABLE_GET_COLUMN_FROM_OID(instance->instance_oid.id))
+  // {
+  // case 1: /* ifIndex */
+  //   *value_s32 = netif_to_num(netif);
+  //   value_len = sizeof(*value_s32);
+  //   break;
+  // case 2: /* ifDescr */
+  //   value_len = sizeof(netif->name);
+  //   MEMCPY(value, netif->name, value_len);
+  //   break;
+  // case 3: /* ifType */
+  //   *value_s32 = netif->link_type;
+  //   value_len = sizeof(*value_s32);
+  //   break;
+  // case 4: /* ifMtu */
+  //   *value_s32 = netif->mtu;
+  //   value_len = sizeof(*value_s32);
+  //   break;
+  // case 5: /* ifSpeed */
+  //   *value_u32 = netif->link_speed;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 6: /* ifPhysAddress */
+  //   value_len = sizeof(netif->hwaddr);
+  //   MEMCPY(value, &netif->hwaddr, value_len);
+  //   break;
+  // case 7: /* ifAdminStatus */
+  //   if (netif_is_up(netif)) {
+  //     *value_s32 = iftable_ifOperStatus_up;
+  //   } else {
+  //     *value_s32 = iftable_ifOperStatus_down;
+  //   }
+  //   value_len = sizeof(*value_s32);
+  //   break;
+  // case 8: /* ifOperStatus */
+  //   if (netif_is_up(netif)) {
+  //     if (netif_is_link_up(netif)) {
+  //       *value_s32 = iftable_ifAdminStatus_up;
+  //     } else {
+  //       *value_s32 = iftable_ifAdminStatus_lowerLayerDown;
+  //     }
+  //   } else {
+  //     *value_s32 = iftable_ifAdminStatus_down;
+  //   }
+  //   value_len = sizeof(*value_s32);
+  //   break;
+  // case 9: /* ifLastChange */
+  //   *value_u32 = netif->ts;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 10: /* ifInOctets */
+  //   *value_u32 = netif->mib2_counters.ifinoctets;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 11: /* ifInUcastPkts */
+  //   *value_u32 = netif->mib2_counters.ifinucastpkts;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 12: /* ifInNUcastPkts */
+  //   *value_u32 = netif->mib2_counters.ifinnucastpkts;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 13: /* ifInDiscards */
+  //   *value_u32 = netif->mib2_counters.ifindiscards;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 14: /* ifInErrors */
+  //   *value_u32 = netif->mib2_counters.ifinerrors;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 15: /* ifInUnkownProtos */
+  //   *value_u32 = netif->mib2_counters.ifinunknownprotos;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 16: /* ifOutOctets */
+  //   *value_u32 = netif->mib2_counters.ifoutoctets;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 17: /* ifOutUcastPkts */
+  //   *value_u32 = netif->mib2_counters.ifoutucastpkts;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 18: /* ifOutNUcastPkts */
+  //   *value_u32 = netif->mib2_counters.ifoutnucastpkts;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 19: /* ifOutDiscarts */
+  //   *value_u32 = netif->mib2_counters.ifoutdiscards;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 20: /* ifOutErrors */
+  //   *value_u32 = netif->mib2_counters.ifouterrors;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // case 21: /* ifOutQLen */
+  //   *value_u32 = iftable_ifOutQLen;
+  //   value_len = sizeof(*value_u32);
+  //   break;
+  // /** @note returning zeroDotZero (0.0) no media specific MIB support */
+  // case 22: /* ifSpecific */
+  //   value_len = snmp_zero_dot_zero.len * sizeof(u32_t);
+  //   MEMCPY(value, snmp_zero_dot_zero.id, value_len);
+  //   break;
+  // default:
+  //   return 0;
+  // }
 
   return value_len;
 }

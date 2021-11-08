@@ -64,81 +64,81 @@ ip_get_value(struct snmp_node_instance* instance, void* value)
   s32_t* sint_ptr = (s32_t*)value;
   u32_t* uint_ptr = (u32_t*)value;
 
-  switch (instance->node->oid) {
-  case 1: /* ipForwarding */
-#if IP_FORWARD
-    /* forwarding */
-    *sint_ptr = 1;
-#else
-    /* not-forwarding */
-    *sint_ptr = 2;
-#endif
-    return sizeof(*sint_ptr);
-  case 2: /* ipDefaultTTL */
-    *sint_ptr = IP_DEFAULT_TTL;
-    return sizeof(*sint_ptr);
-  case 3: /* ipInReceives */
-    *uint_ptr = STATS_GET(mib2.ipinreceives);
-    return sizeof(*uint_ptr);
-  case 4: /* ipInHdrErrors */
-    *uint_ptr = STATS_GET(mib2.ipinhdrerrors);
-    return sizeof(*uint_ptr);
-  case 5: /* ipInAddrErrors */
-    *uint_ptr = STATS_GET(mib2.ipinaddrerrors);
-    return sizeof(*uint_ptr);
-  case 6: /* ipForwDatagrams */
-    *uint_ptr = STATS_GET(mib2.ipforwdatagrams);
-    return sizeof(*uint_ptr);
-  case 7: /* ipInUnknownProtos */
-    *uint_ptr = STATS_GET(mib2.ipinunknownprotos);
-    return sizeof(*uint_ptr);
-  case 8: /* ipInDiscards */
-    *uint_ptr = STATS_GET(mib2.ipindiscards);
-    return sizeof(*uint_ptr);
-  case 9: /* ipInDelivers */
-    *uint_ptr = STATS_GET(mib2.ipindelivers);
-    return sizeof(*uint_ptr);
-  case 10: /* ipOutRequests */
-    *uint_ptr = STATS_GET(mib2.ipoutrequests);
-    return sizeof(*uint_ptr);
-  case 11: /* ipOutDiscards */
-    *uint_ptr = STATS_GET(mib2.ipoutdiscards);
-    return sizeof(*uint_ptr);
-  case 12: /* ipOutNoRoutes */
-    *uint_ptr = STATS_GET(mib2.ipoutnoroutes);
-    return sizeof(*uint_ptr);
-  case 13: /* ipReasmTimeout */
-#if IP_REASSEMBLY
-    *sint_ptr = IP_REASS_MAXAGE;
-#else
-    *sint_ptr = 0;
-#endif
-    return sizeof(*sint_ptr);
-  case 14: /* ipReasmReqds */
-    *uint_ptr = STATS_GET(mib2.ipreasmreqds);
-    return sizeof(*uint_ptr);
-  case 15: /* ipReasmOKs */
-    *uint_ptr = STATS_GET(mib2.ipreasmoks);
-    return sizeof(*uint_ptr);
-  case 16: /* ipReasmFails */
-    *uint_ptr = STATS_GET(mib2.ipreasmfails);
-    return sizeof(*uint_ptr);
-  case 17: /* ipFragOKs */
-    *uint_ptr = STATS_GET(mib2.ipfragoks);
-    return sizeof(*uint_ptr);
-  case 18: /* ipFragFails */
-    *uint_ptr = STATS_GET(mib2.ipfragfails);
-    return sizeof(*uint_ptr);
-  case 19: /* ipFragCreates */
-    *uint_ptr = STATS_GET(mib2.ipfragcreates);
-    return sizeof(*uint_ptr);
-  case 23: /* ipRoutingDiscards: not supported -> always 0 */
-    *uint_ptr = 0;
-    return sizeof(*uint_ptr);
-  default:
-    LWIP_DEBUGF(SNMP_MIB_DEBUG,("ip_get_value(): unknown id: %"S32_F"\n", instance->node->oid));
-    break;
-  }
+//   switch (instance->node->oid) {
+//   case 1: /* ipForwarding */
+// #if IP_FORWARD
+//     /* forwarding */
+//     *sint_ptr = 1;
+// #else
+//     /* not-forwarding */
+//     *sint_ptr = 2;
+// #endif
+//     return sizeof(*sint_ptr);
+//   case 2: /* ipDefaultTTL */
+//     *sint_ptr = IP_DEFAULT_TTL;
+//     return sizeof(*sint_ptr);
+//   case 3: /* ipInReceives */
+//     *uint_ptr = STATS_GET(mib2.ipinreceives);
+//     return sizeof(*uint_ptr);
+//   case 4: /* ipInHdrErrors */
+//     *uint_ptr = STATS_GET(mib2.ipinhdrerrors);
+//     return sizeof(*uint_ptr);
+//   case 5: /* ipInAddrErrors */
+//     *uint_ptr = STATS_GET(mib2.ipinaddrerrors);
+//     return sizeof(*uint_ptr);
+//   case 6: /* ipForwDatagrams */
+//     *uint_ptr = STATS_GET(mib2.ipforwdatagrams);
+//     return sizeof(*uint_ptr);
+//   case 7: /* ipInUnknownProtos */
+//     *uint_ptr = STATS_GET(mib2.ipinunknownprotos);
+//     return sizeof(*uint_ptr);
+//   case 8: /* ipInDiscards */
+//     *uint_ptr = STATS_GET(mib2.ipindiscards);
+//     return sizeof(*uint_ptr);
+//   case 9: /* ipInDelivers */
+//     *uint_ptr = STATS_GET(mib2.ipindelivers);
+//     return sizeof(*uint_ptr);
+//   case 10: /* ipOutRequests */
+//     *uint_ptr = STATS_GET(mib2.ipoutrequests);
+//     return sizeof(*uint_ptr);
+//   case 11: /* ipOutDiscards */
+//     *uint_ptr = STATS_GET(mib2.ipoutdiscards);
+//     return sizeof(*uint_ptr);
+//   case 12: /* ipOutNoRoutes */
+//     *uint_ptr = STATS_GET(mib2.ipoutnoroutes);
+//     return sizeof(*uint_ptr);
+//   case 13: /* ipReasmTimeout */
+// #if IP_REASSEMBLY
+//     *sint_ptr = IP_REASS_MAXAGE;
+// #else
+//     *sint_ptr = 0;
+// #endif
+//     return sizeof(*sint_ptr);
+//   case 14: /* ipReasmReqds */
+//     *uint_ptr = STATS_GET(mib2.ipreasmreqds);
+//     return sizeof(*uint_ptr);
+//   case 15: /* ipReasmOKs */
+//     *uint_ptr = STATS_GET(mib2.ipreasmoks);
+//     return sizeof(*uint_ptr);
+//   case 16: /* ipReasmFails */
+//     *uint_ptr = STATS_GET(mib2.ipreasmfails);
+//     return sizeof(*uint_ptr);
+//   case 17: /* ipFragOKs */
+//     *uint_ptr = STATS_GET(mib2.ipfragoks);
+//     return sizeof(*uint_ptr);
+//   case 18: /* ipFragFails */
+//     *uint_ptr = STATS_GET(mib2.ipfragfails);
+//     return sizeof(*uint_ptr);
+//   case 19: /* ipFragCreates */
+//     *uint_ptr = STATS_GET(mib2.ipfragcreates);
+//     return sizeof(*uint_ptr);
+//   case 23: /* ipRoutingDiscards: not supported -> always 0 */
+//     *uint_ptr = 0;
+//     return sizeof(*uint_ptr);
+//   default:
+//     LWIP_DEBUGF(SNMP_MIB_DEBUG,("ip_get_value(): unknown id: %"S32_F"\n", instance->node->oid));
+//     break;
+//   }
 
   return 0;
 }
