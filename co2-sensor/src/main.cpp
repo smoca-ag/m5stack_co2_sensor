@@ -17,10 +17,10 @@
 
 #include <main.h>
 #include <lwip/apps/snmp.h>
-#include <co2Sensor-mib.h>
+#include <sensorhub-mib.h>
 
 static const struct snmp_mib *mibs[] = {
-    &co2sensormib
+    &sensorhub_mib
 };
 
 struct state state;
@@ -173,19 +173,29 @@ void setup()
 }
 
 extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type) {
-    switch(measurement_type) {
-        case CO2_PPM_MEASUREMENT:
-            return state.co2_ppm;
-        case TEMPERATURE_MEASUREMENT:
-            return state.temperature_celsius;
-        case HUMIDITY_MEASUREMENT:
-            return state.humidity_percent;
-        case BATTERY_VOLTAGE_MEASUREMENT:
-            return state.battery_voltage;
-        case BATTERY_CURRENT_MEASUREMENT:
-            return state.battery_current;
-        default:
-            return 0;
+    switch(sensor_id) {
+        case 1:
+            switch(measurement_type) {
+                case CO2_PPM_MEASUREMENT:
+                    return state.co2_ppm;
+                case TEMPERATURE_MEASUREMENT:
+                    return state.temperature_celsius;
+                case HUMIDITY_MEASUREMENT:
+                    return state.humidity_percent;
+                default:
+                    return 0;
+            }
+            break;
+        case 2:
+            switch (measurement_type) {
+                case BATTERY_VOLTAGE_MEASUREMENT:
+                    return state.battery_voltage;
+                case BATTERY_CURRENT_MEASUREMENT:
+                    return state.battery_current;
+                default:
+                    return 0;
+            }
+            break;
     }
 }
 

@@ -23,6 +23,7 @@
         "fstream": "cpp",
         "sstream": "cpp",
         "streambuf": "cpp",
-        "cstring": "c"
+        "cstring": "c",
+        "sensorhub-mib.h": "c"
     }
 }

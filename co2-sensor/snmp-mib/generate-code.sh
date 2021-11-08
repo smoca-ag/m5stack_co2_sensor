@@ -1,3 +1,3 @@
 #!/bin/bash
 
-$(dirname "$0")/mib2LwipC/LwipMibCompiler $(dirname "$0")/co2sensor-mib.mib $(dirname "$0")/generated /usr/share/snmp/mibs
+$(dirname "$0")/lwip-code-generator/LwipMibCompiler $(dirname "$0")/sensorhub.mib $(dirname "$0")/generated /usr/share/snmp/mibs
