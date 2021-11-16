@@ -30,9 +30,14 @@ static const struct snmp_table_col_def shmeasurementtable_columns[] = {
 };
 static const struct snmp_table_node shmeasurementtable = SNMP_TABLE_CREATE(2, shmeasurementtable_columns, shmeasurementtable_get_instance, shmeasurementtable_get_next_instance, shmeasurementtable_get_value, NULL, NULL);
 
+static s16_t shSetExample_get_value(struct snmp_node_instance *instance, void *value);
+static snmp_err_t shSetExample_set_value(struct snmp_node_instance *instance, u16_t len, void *value);
+static const struct snmp_scalar_node shsetexample_scalar = SNMP_SCALAR_CREATE_NODE(3, SNMP_NODE_INSTANCE_READ_WRITE, SNMP_ASN1_TYPE_INTEGER, shSetExample_get_value, snmp_set_test_ok, shSetExample_set_value);
+
 static const struct snmp_node *const sensorhubmib_subnodes[] = {
   &shsensortable.node.node,
-  &shmeasurementtable.node.node
+  &shmeasurementtable.node.node,
+  &shsetexample_scalar.node.node
 };
 static const struct snmp_tree_node sensorhubmib_root = SNMP_CREATE_TREE_NODE(1, sensorhubmib_subnodes);
 static const u32_t sensorhubmib_base_oid[] = {1,3,6,1,4,1,58049,1};
@@ -260,6 +265,29 @@ static s16_t shmeasurementtable_get_value(struct snmp_node_instance *cell_instan
          break;
    }
    return value_len;
+}
+
+static s16_t shSetExample_get_value(struct snmp_node_instance *instance, void *value)
+{
+   s16_t value_len;
+   s32_t *v = (s32_t *)value;
+
+   LWIP_UNUSED_ARG(instance);
+   /* TODO: put requested value to '*v' here */
+   value_len = sizeof(s32_t);
+   LWIP_UNUSED_ARG(v);
+   return value_len;
+}
+static snmp_err_t shSetExample_set_value(struct snmp_node_instance *instance, u16_t len, void *value)
+{
+   snmp_err_t err = SNMP_ERR_NOERROR;
+   s32_t *v = (s32_t *)value;
+
+   LWIP_UNUSED_ARG(instance);
+   /* TODO: store new value contained in '*v' here */
+   LWIP_UNUSED_ARG(v);
+   LWIP_UNUSED_ARG(len);
+   return err;
 }
 
 #endif /* LWIP_SNMP */

@@ -84,11 +84,18 @@ ShMeasurementEntry ::=
     }
 
 shMeasurementType OBJECT-TYPE
-    SYNTAX Integer32 { co2(1), celsius(2), humidity(3), batteryVoltage(4), batteryCurrent(5) }
+    SYNTAX Integer32 { co2(1), temperature(2), humidity(3), voltage(4), electricCurrent(5), iaq(6), pressure(7) }
     MAX-ACCESS read-only
     STATUS current
     DESCRIPTION
-        "Type of a measurement: co2PPM is in ppm, celsius is in centidegree celsius, humidity is in promile, batteryVoltage is in centivolt, batteryCurrrent is in mA"
+        "Type of a measurement:
+        co2 is in ppm,
+        temperature is in decidegree celsius,
+        humidity is in premille,
+        voltage is in centivolt,
+        electricCurrent is in milliampere,
+        iaq is index for air quality (https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme688-ds000.pdf - page 11),
+        pressure is in pascal"
     ::= { shMeasurementEntry 1 }
 
 shMeasurementValue OBJECT-TYPE
@@ -98,4 +105,12 @@ shMeasurementValue OBJECT-TYPE
     DESCRIPTION
         "Measurement value"
     ::= { shMeasurementEntry 2 }
+
+shSetExample OBJECT-TYPE
+    SYNTAX Integer32
+    ACCESS read-write
+    STATUS current
+    DESCRIPTION
+        "Measurement value"
+    ::= { sensorHubMIB 3 }
 END
