@@ -70,7 +70,39 @@ To keep time up to date the device synchronizes with a time server each night be
 
 #### Firmware updates
 
-Is a new firmware available, it can manually be update via WiFi.
+Is a new firmware available, it can manually be updated via WiFi.
+
+#### SNMP
+
+Using SNMP you are able to read the values of the co2, temperature and humidity sensors and also check the battery status of the device:
+1. First you have to make sure you have net-snmp installed on your system. You can do this using your packet manager or by downloading it from http://www.net-snmp.org/download.html
+2. Second you have to find out where your mib files are stored using the command ```net-snmp-config --default-mibdirs```.
+3. Then you have to copy the [mib file](./snmp-mib/sensorhub.mib) from ```/snmp-mib/sensorhub.mib``` into one of the listed directories. e.g. ```cp snmp-mib/sensorhub.mib ~/.snmp/mibs```
+4. Done that, you can now use snmptable to list the sensors: 
+    ```snmptable -m +SENSORHUB-MIB -c public {IP-Address} shSensorTable```
+    \
+    Which should output the following:
+    ```
+    SNMP table: SENSORHUB-MIB::shSensorTable
+
+    shSensorName
+            SCD30
+            BATTERY
+   ```
+    or to list the measurement values: 
+    ```snmptable -m +SENSORHUB-MIB -c public {IP-Address} shMeasurementTable```
+    \
+    Which should output something like this:
+    ```
+    SNMP table: SENSORHUB-MIB::shMeasurementTable
+
+    shMeasurementType shMeasurementValue
+                co2                  617
+        temperature                  207
+           humidity                  433
+            voltage                  3
+    electricCurrent                  276
+   ```
 
 ## Usage
 
