@@ -1,0 +1,116 @@
+SENSORHUB-MIB DEFINITIONS ::= BEGIN
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, Integer32, enterprises FROM SNMPv2-SMI
+    DisplayString FROM SNMPv2-TC
+;
+
+sensorHubMIB MODULE-IDENTITY
+    LAST-UPDATED "202111011710Z"
+    ORGANIZATION "www.smoca.ch"
+    CONTACT-INFO 
+        "email: info@smoca.ch"
+    DESCRIPTION
+	"MIB module for sensors"
+    REVISION     "202111011710Z"
+    DESCRIPTION
+	"First draft"
+    ::= { enterprises 58049 1 }
+
+
+shSensorTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF ShSensorEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "Table of sensors"
+    ::= { sensorHubMIB 1 }
+
+shSensorEntry OBJECT-TYPE
+    SYNTAX ShSensorEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "A row describing a sensor"
+    INDEX { shSensorId }
+    ::= { shSensorTable 1 }
+
+ShSensorEntry ::=
+    SEQUENCE {
+        shSensorId Integer32,
+        shSensorName DisplayString
+    }
+
+shSensorId OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "Id of a sensor"
+    ::= { shSensorEntry 1 }
+
+shSensorName OBJECT-TYPE
+    SYNTAX DisplayString
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Name of a sensor"
+    ::= { shSensorEntry 2 }
+
+
+
+shMeasurementTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF ShMeasurementEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "Table of measurements"
+    ::= { sensorHubMIB 2 }
+
+shMeasurementEntry OBJECT-TYPE
+    SYNTAX ShMeasurementEntry
+    MAX-ACCESS not-accessible
+    STATUS current
+    DESCRIPTION
+        "A row describing a measurement"
+    INDEX { shSensorId }
+    ::= { shMeasurementTable 1 }
+
+ShMeasurementEntry ::= 
+    SEQUENCE {
+        shSensorId Integer32,
+        shMeasurementType Integer32,
+        shMeasurementValue Integer32
+    }
+
+shMeasurementType OBJECT-TYPE
+    SYNTAX Integer32 { co2(1), temperature(2), humidity(3), voltage(4), electricCurrent(5), iaq(6), pressure(7) }
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Type of a measurement:
+        co2 is in ppm,
+        temperature is in decidegree celsius,
+        humidity is in premille,
+        voltage is in centivolt,
+        electricCurrent is in milliampere,
+        iaq is index for air quality (https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme688-ds000.pdf - page 11),
+        pressure is in pascal"
+    ::= { shMeasurementEntry 1 }
+
+shMeasurementValue OBJECT-TYPE
+    SYNTAX Integer32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "Measurement value"
+    ::= { shMeasurementEntry 2 }
+
+shSetExample OBJECT-TYPE
+    SYNTAX Integer32
+    ACCESS read-write
+    STATUS current
+    DESCRIPTION
+        "Measurement value"
+    ::= { sensorHubMIB 3 }
+END
