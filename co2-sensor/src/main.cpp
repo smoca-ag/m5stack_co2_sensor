@@ -1246,7 +1246,7 @@ void updateTouch(struct state *state)
         break;
 
     case menuModeWiFiSettings:
-        if (toggleWiFiButton.wasPressed() && !state->is_config_running)
+        if (toggleWiFiButton.wasPressed())
             state->is_wifi_activated = !state->is_wifi_activated;
         if (resetWiFiButton.wasPressed())
         {
