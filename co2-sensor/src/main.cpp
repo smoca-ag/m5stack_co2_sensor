@@ -20,8 +20,7 @@
 #include <sensorhub-mib.h>
 
 static const struct snmp_mib *mibs[] = {
-    &sensorhub_mib
-};
+    &sensorhub_mib};
 
 struct state state;
 struct graph graph;
@@ -159,43 +158,47 @@ void setup()
     initAsyncWifiManager(&state);
     initSTAIPConfigStruct(WM_STA_IPconfig);
 
-    #if LWIP_SNMP
-    const struct snmp_obj_id device_enterprise_oid = {8, {1,3,6,1,4,1,58049,1}};
+#if LWIP_SNMP
+    const struct snmp_obj_id device_enterprise_oid = {8, {1, 3, 6, 1, 4, 1, 58049, 1}};
     snmp_set_device_enterprise_oid(&device_enterprise_oid);
 
     snmp_set_mibs(mibs, LWIP_ARRAYSIZE(mibs));
     snmp_init();
-    #endif /* LWIP_SNMP */
+#endif /* LWIP_SNMP */
 
     cycle = 0;
     Serial.print(state.is_wifi_activated ? "WiFi on" : "WiFi off");
     Serial.println(" status: " + (String)WiFi.status());
 }
 
-extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type) {
-    switch(sensor_id) {
-        case 1:
-            switch(measurement_type) {
-                case CO2_PPM_MEASUREMENT:
-                    return state.co2_ppm;
-                case TEMPERATURE_MEASUREMENT:
-                    return state.temperature_celsius;
-                case HUMIDITY_MEASUREMENT:
-                    return state.humidity_percent;
-                default:
-                    return 0;
-            }
-            break;
-        case 2:
-            switch (measurement_type) {
-                case BATTERY_VOLTAGE_MEASUREMENT:
-                    return state.battery_voltage;
-                case BATTERY_CURRENT_MEASUREMENT:
-                    return state.battery_current;
-                default:
-                    return 0;
-            }
-            break;
+extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type)
+{
+    switch (sensor_id)
+    {
+    case 1:
+        switch (measurement_type)
+        {
+        case CO2_PPM_MEASUREMENT:
+            return state.co2_ppm;
+        case TEMPERATURE_MEASUREMENT:
+            return state.temperature_celsius;
+        case HUMIDITY_MEASUREMENT:
+            return state.humidity_percent;
+        default:
+            return 0;
+        }
+        break;
+    case 2:
+        switch (measurement_type)
+        {
+        case BATTERY_VOLTAGE_MEASUREMENT:
+            return state.battery_voltage;
+        case BATTERY_CURRENT_MEASUREMENT:
+            return state.battery_current;
+        default:
+            return 0;
+        }
+        break;
     }
 }
 
@@ -1655,7 +1658,7 @@ void drawGraph(struct state *oldstate, struct state *state)
         }
     }
 
-    //Serial.println("graph done");
+    // Serial.println("graph done");
     DisbuffGraph.pushSprite(0, 144);
 }
 
@@ -2037,7 +2040,7 @@ void writeSsd(struct state *state)
         String(state->temperature_celsius / 10.0, 2) + "," +
         String(state->humidity_percent / 10.0, 2) + "," +
         String(state->battery_mah) + "\r\n";
-    //Serial.println(dataMessage);
+    // Serial.println(dataMessage);
     appendFile(SD, "/data.txt", dataMessage.c_str());
 }
 
@@ -2095,7 +2098,7 @@ void syncData(struct state *state)
         return;
     }
     fetchRemoteVersion(state);
-    bool time_synched = setRtc(state);
+    bool time_synched = setRtc();
 
     if (time_synched)
     {
@@ -2128,12 +2131,12 @@ void syncData(struct state *state)
     state->force_sync = false;
 }
 
-bool setRtc(struct state *state)
+bool setRtc()
 {
     configTime(0, 0, "pool.ntp.org");
 
     struct tm timeinfo;
-    if (!getLocalTime(&timeinfo), 5)
+    if (!getLocalTime(&timeinfo, 5))
     {
         Serial.println("Failed to obtain time");
         return false;
@@ -2184,12 +2187,12 @@ void setTimeFromRtc()
 // Append data to the SD card (DON'T MODIFY THIS FUNCTION)
 void appendFile(fs::FS &fs, const char *path, const char *message)
 {
-    //Serial.printf("Appending to file: %s\n", path);
+    // Serial.printf("Appending to file: %s\n", path);
 
     File file = fs.open(path, FILE_APPEND);
     if (!file)
     {
-        //Serial.println("Failed to open file for appending");
+        // Serial.println("Failed to open file for appending");
         return;
     }
     if (file.print(message))

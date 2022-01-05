@@ -1,4 +1,4 @@
-#define VERSION_NUMBER "1.1.6"
+#define VERSION_NUMBER "1.1.7"
 #define VERSION_NUMBER_LEN 8
 #define FIRMWARE_SERVER "co2-sensor-firmware.smoca.ch"
 #define REMOTE_VERSION_FILE "/version.json"
@@ -65,9 +65,6 @@
 #include <WiFi.h>
 #include <ESPAsync_WiFiManager.h>
 #include <ArduinoJson.h>
-
-// time sync
-#include <NTPClient.h>
 
 // firmware update
 #include <WiFiClient.h>
@@ -310,7 +307,7 @@ void printTime();
 
 void syncData(struct state *state);
 
-bool setRtc(struct state *state);
+bool setRtc();
 
 void setTimeFromRtc();
 
