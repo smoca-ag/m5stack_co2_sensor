@@ -314,9 +314,9 @@ void saveStateFile(struct state *oldstate, struct state *state)
         (String)state->battery_capacity + "\n" +
         (String)state->auto_calibration_on + "\n" +
         (String)state->calibration_value + "\n" +
-        (String)state->is_wifi_activated + "\n" +
-        (String)state->is_screen_rotated + "\n" +
-        (String)state->password + "\n" +
+        (state->is_wifi_activated ? "1" : "0") + "\n" +
+        (state->is_screen_rotated ? "1" : "0") + "\n" +
+        (state->password ? "1" : "0") + "\n" +
         (String)state->newest_version + "\n");
     f.close();
     Serial.println("State file saved");
