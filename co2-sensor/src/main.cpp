@@ -56,7 +56,10 @@ TFT_eSprite DisbuffValue = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffGraph = TFT_eSprite(&M5.Lcd);
 TFT_eSprite DisbuffBody = TFT_eSprite(&M5.Lcd);
 
-String ssid = "smoca CO2-" + String(ESP_getChipId(), HEX);
+uint64_t chipid = ESP.getEfuseMac(); // The chip ID is essentially its MAC address(length: 6 bytes).
+uint16_t chip = (uint16_t)(chipid >> 32);
+
+String ssid = "smoca CO2-" + String(chip, HEX) + String((uint32_t)chipid, HEX);
 IPAddress stationIP = IPAddress(0, 0, 0, 0);
 IPAddress gatewayIP = IPAddress(192, 168, 2, 1);
 IPAddress netMask = IPAddress(255, 255, 255, 0);
