@@ -66,9 +66,6 @@
 #include <ESPAsync_WiFiManager.h>
 #include <ArduinoJson.h>
 
-// time sync
-#include <NTPClient.h>
-
 // firmware update
 #include <WiFiClient.h>
 #include <HTTPClient.h>
@@ -310,7 +307,7 @@ void printTime();
 
 void syncData(struct state *state);
 
-bool setRtc(struct state *state);
+bool setRtc();
 
 void setTimeFromRtc();
 
