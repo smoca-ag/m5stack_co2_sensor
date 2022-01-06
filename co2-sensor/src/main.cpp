@@ -202,6 +202,8 @@ extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type)
             return 0;
         }
         break;
+    default:
+        return 0;
     }
 }
 
@@ -319,7 +321,7 @@ void saveStateFile(struct state *oldstate, struct state *state)
         (String)state->calibration_value + "\n" +
         (state->is_wifi_activated ? "1" : "0") + "\n" +
         (state->is_screen_rotated ? "1" : "0") + "\n" +
-        (state->password ? "1" : "0") + "\n" +
+        (String)state->password + "\n" +
         (String)state->newest_version + "\n");
     f.close();
     Serial.println("State file saved");
@@ -464,13 +466,22 @@ void handleWifiMqtt(struct state *oldstate, struct state *state)
             {
                 if (state->wifi_status == WL_CONNECTED)
                 {
+                    Serial.println("Disconnect WiFi");
                     WiFi.disconnect(true, false);
+                }
+
+                if (WiFi.getMode() != WIFI_OFF)
+                {
+                    Serial.println("Turn off WiFi");
                     WiFi.mode(WIFI_OFF);
                     esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
                 }
 
                 if (mqtt.connected())
+                {
+                    Serial.println("Disconnect MQTT");
                     mqtt.disconnect();
+                }
 
                 break;
             }
@@ -961,8 +972,7 @@ void handleConfigPortal(struct state *oldstate, struct state *state)
         if (shouldStartWiFiManager)
         {
             Serial.println("No Saved WiFi Credentials. Starting Config Portal");
-            WiFi.begin("", "");
-            delay(1000);
+            WiFi.enableSTA(true);
             asyncWifiManager->startConfigPortalModeless((const char *)ssid.c_str(),
                                                         (const char *)state->password,
                                                         false);
@@ -1248,6 +1258,12 @@ void updateTouch(struct state *state)
     case menuModeWiFiSettings:
         if (toggleWiFiButton.wasPressed())
             state->is_wifi_activated = !state->is_wifi_activated;
+
+        // abort config
+        if (!state->is_wifi_activated)
+        {
+            state->is_config_running = false;
+        }
         if (resetWiFiButton.wasPressed())
         {
             state->is_requesting_reset = true;
@@ -1388,6 +1404,7 @@ void setPassword(struct state *state)
     {
         String password = randomPassword(CP_PASSWORD_GENERATION_LEN);
         strncpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
+        Serial.print("New Password generated: ");
         Serial.println(state->password);
     }
 }
