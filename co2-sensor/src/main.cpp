@@ -321,7 +321,7 @@ void saveStateFile(struct state *oldstate, struct state *state)
         (String)state->calibration_value + "\n" +
         (state->is_wifi_activated ? "1" : "0") + "\n" +
         (state->is_screen_rotated ? "1" : "0") + "\n" +
-        (state->password ? "1" : "0") + "\n" +
+        (String)state->password + "\n" +
         (String)state->newest_version + "\n");
     f.close();
     Serial.println("State file saved");
@@ -1390,6 +1390,7 @@ void setPassword(struct state *state)
     {
         String password = randomPassword(CP_PASSWORD_GENERATION_LEN);
         strncpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
+        Serial.print("New Password generated: ");
         Serial.println(state->password);
     }
 }
