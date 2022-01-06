@@ -202,6 +202,8 @@ extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type)
             return 0;
         }
         break;
+    default:
+        return 0;
     }
 }
 
