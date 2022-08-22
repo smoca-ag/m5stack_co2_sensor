@@ -62,7 +62,7 @@ To use MQTT, synchronization and update functionality the device must have inter
 
 [MQTT](https://mqtt.org/) can be used to send the sensors data to a custom MQTT broker. Server, Port, Topic, Device name, Username and Password can also be configured in the web interface. Each minute the device sends its data in the following format: `{TOPIC}/{CATEGORY} {VALUE}`. Here an example: `sensor/co2 650`.  
 Topics are able to have subtopics: `office2/meeting_room1/co2 1100`.  
-The following categories are provided by the device: `/co2`, `/humidity`, `/temperature`.
+The following categories are provided by the device: `/co2`, `/humidity`, `/temperature` and `/battery`.
 
 #### Time synchronization
 
