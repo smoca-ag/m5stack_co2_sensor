@@ -756,9 +756,6 @@ void handleWifiMqtt(struct state *oldstate, struct state *state)
                     if (mqtt.publish((const char *)humidityTopic.c_str(), (const char *)humidity.c_str()))
                         Serial.println("Published humidity to MQTT");
 
-                    if (mqtt.publish((const char *)humidityTopic.c_str(), (const char *)humidity.c_str()))
-                        Serial.println("Published humidity to MQTT");
-
                     if (mqtt.publish((const char *)temperatureTopic.c_str(),
                                      (const char *)temperature.c_str()))
                         Serial.println("Published temperature to MQTT");
