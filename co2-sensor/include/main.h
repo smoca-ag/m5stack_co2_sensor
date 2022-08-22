@@ -28,6 +28,7 @@
 #define TOPIC_CO2 "/co2"
 #define TOPIC_HUMIDITY "/humidity"
 #define TOPIC_TEMPERATURE "/temperature"
+#define TOPIC_BATTERY "/battery"
 
 #define MQTT_SERVER_Label "MQTT_SERVER_Label"
 #define MQTT_SERVERPORT_Label "MQTT_SERVERPORT_Label"

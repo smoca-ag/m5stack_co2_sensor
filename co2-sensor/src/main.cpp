@@ -743,10 +743,12 @@ void handleWifiMqtt(struct state *oldstate, struct state *state)
                     String co2Topic = (String)state->mqttTopic + (String)TOPIC_CO2;
                     String humidityTopic = (String)state->mqttTopic + (String)TOPIC_HUMIDITY;
                     String temperatureTopic = (String)state->mqttTopic + (String)TOPIC_TEMPERATURE;
+                    String batteryTopic = (String)state->mqttTopic + (String)TOPIC_BATTERY;
 
                     String co2 = (String)state->co2_ppm;
                     String humidity = (String)((double)state->humidity_percent / 10);
                     String temperature = (String)((double)state->temperature_celsius / 10);
+                    String battery = (String)state->battery_percent;
 
                     if (mqtt.publish((const char *)co2Topic.c_str(), (const char *)co2.c_str()))
                         Serial.println("Published co2 to MQTT");
@@ -754,9 +756,15 @@ void handleWifiMqtt(struct state *oldstate, struct state *state)
                     if (mqtt.publish((const char *)humidityTopic.c_str(), (const char *)humidity.c_str()))
                         Serial.println("Published humidity to MQTT");
 
+                    if (mqtt.publish((const char *)humidityTopic.c_str(), (const char *)humidity.c_str()))
+                        Serial.println("Published humidity to MQTT");
+
                     if (mqtt.publish((const char *)temperatureTopic.c_str(),
                                      (const char *)temperature.c_str()))
                         Serial.println("Published temperature to MQTT");
+
+                    if (mqtt.publish((const char *)batteryTopic.c_str(), (const char *)battery.c_str()))
+                        Serial.println("Published battery to MQTT");
                 }
 
                 nextMqttPublish = currentMillis + MQTT_PUBLISH_INTERVAL;
