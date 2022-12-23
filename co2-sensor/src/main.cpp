@@ -951,7 +951,7 @@ void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig)
 
 void sendMQTTDiscoveryMessage(struct discoveryConfig* config)
 {
-    char buffer[512];
+    uint8_t buffer[512];
     String topic = config->configTopic;
     DynamicJsonDocument json(1024);
     JsonObject device  = json.createNestedObject((String)HOMEASSISTANT_DEVICE_Label);
@@ -968,7 +968,7 @@ void sendMQTTDiscoveryMessage(struct discoveryConfig* config)
     json[HOMEASSISTANT_DEVICE_CLASS_Label] = config->deviceClass;
     
     size_t n = serializeJson(json, buffer);
-    mqtt.publish(topic.c_str(), buffer, n, true);
+    mqtt.publish((const char*)topic.c_str(), buffer, n, true);
 }
 
 void sendMQTTDiscoveryMessages(
