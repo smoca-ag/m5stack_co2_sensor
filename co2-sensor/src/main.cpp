@@ -968,7 +968,7 @@ void sendMQTTDiscoveryMessage(struct discoveryConfig* config)
     json[HOMEASSISTANT_DEVICE_CLASS_Label] = config->deviceClass;
     
     size_t n = serializeJson(json, buffer);
-    mqtt.publish(topic.c_str(), buffer, n);
+    mqtt.publish(topic.c_str(), buffer, n, true);
 }
 
 void sendMQTTDiscoveryMessages(
