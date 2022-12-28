@@ -103,7 +103,7 @@ struct discoveryConfig temperatureConfig;
 struct discoveryConfig batteryConfig;
 
 // MQTT Discovery unique identifiers
-String identifier = String(chip, HEX);
+String identifier = String(chip, HEX) + String((uint32_t)chipid, HEX);
 String co2DiscoveryIdentifier = identifier + "-1";
 String humidityDiscoveryIdentifier = identifier + "-2";
 String temperatureDiscoveryIdentifier = identifier + "-3";
@@ -486,74 +486,144 @@ void initAirSensor()
 
 void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config)
 {
-    config->identifiers = identifiers;
-    config->name = state.mqttDevice ? state.mqttDevice : "CO2 Sensor " + identifier;
-    config->model = (String)HOMEASSISTANT_DEVICE_MODEL_Value;
-    config->manufacturer = (String)HOMEASSISTANT_DEVICE_MANUFACTURER_Value;
+    String deviceName = state.mqttDevice ? state.mqttDevice : "CO2 Sensor " + identifier;
+    String deviceModel = (String)HOMEASSISTANT_DEVICE_MODEL_Value;
+    String manufacturer = (String)HOMEASSISTANT_DEVICE_MANUFACTURER_Value;
+
+    strncpy(config->identifiers, identifiers.c_str(), DISCOVERY_IDENTIFIERS_LEN);
+    strncpy(config->name, deviceName.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    strncpy(config->model, deviceModel.c_str(), DISCOVERY_DEVICE_MODEL_NAME_LEN);
+    strncpy(config->manufacturer, manufacturer.c_str(), DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN);
+}
+
+void initDiscoveryValueConfig(
+    struct discoveryConfig *config,
+    String configurationTopic,
+    String uniqueId,
+    String stateTopic,
+    String name,
+    String topic,
+    String unitOfMeasure,
+    String valueTemplate,
+    String deviceClass
+)
+{
+    config->device = deviceConfig;
+    strncpy(config->configTopic, configurationTopic.c_str(), DISCOVERY_TOPIC_LEN);
+    strncpy(config->uniqueId, uniqueId.c_str(), DISCOVERY_UNIQUE_ID_LEN);
+    strncpy(config->name, name.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    strncpy(config->stateTopic, topic.c_str(), DISCOVERY_TOPIC_LEN);
+    strncpy(config->unitOfMeasure, unitOfMeasure.c_str(), DISCOVERY_UNIT_OF_MEASURE_LEN);
+    strncpy(config->valueTemplate, valueTemplate.c_str(), DISCOVERY_VALUE_TEMPLATE_LEN);
+    strncpy(config->deviceClass, deviceClass.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
 }
 
 void initCo2DiscoveryConfig(struct discoveryConfig *config)
 {
-    config->configTopic =
+    String configurationTopic =
         (String)TOPIC_DISCOVERY +
         co2DiscoveryIdentifier +
         (String)TOPIC_CO2 +
         (String)TOPIC_CONFIG;
-    config->uniqueId = co2DiscoveryIdentifier;
-    config->name = "CO2";
-    config->stateTopic = state.mqttTopic + (String)TOPIC_STATE;
-    config->unitOfMeasure = "ppm";
-    config->valueTemplate = "{{ value_json.carbon_dioxide }}";
-    config->device = deviceConfig;
-    config->deviceClass = "carbon_dioxide";
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "CO2";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "ppm";
+    String valueTemplate = "{{ value_json.carbon_dioxide }}";
+    String deviceClass = "carbon_dioxide";
+
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        co2DiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
 }
 
 void initHumidityDiscoveryConfig(struct discoveryConfig *config)
 {
-    config->configTopic =
+    String configurationTopic =
         (String)TOPIC_DISCOVERY +
         humidityDiscoveryIdentifier +
         (String)TOPIC_HUMIDITY +
         (String)TOPIC_CONFIG;
-    config->uniqueId = humidityDiscoveryIdentifier;
-    config->name = "Humidity";
-    config->stateTopic = state.mqttTopic + (String)TOPIC_STATE;
-    config->unitOfMeasure = "%";
-    config->valueTemplate = "{{ value_json.humidity }}";
-    config->device = deviceConfig;
-    config->deviceClass = "humidity";
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "Humidity";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "%";
+    String valueTemplate = "{{ value_json.humidity }}";
+    String deviceClass = "humidity";
+    
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        humidityDiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
 }
 
 void initTemperatureDiscoveryConfig(struct discoveryConfig *config)
 {
-    config->configTopic =
+    String configurationTopic =
         (String)TOPIC_DISCOVERY +
         temperatureDiscoveryIdentifier +
         (String)TOPIC_TEMPERATURE +
         (String)TOPIC_CONFIG;
-    config->uniqueId = temperatureDiscoveryIdentifier;
-    config->name = "Temperature";
-    config->stateTopic = state.mqttTopic + (String)TOPIC_STATE;
-    config->unitOfMeasure = "°C";
-    config->valueTemplate = "{{ value_json.temperature }}";
-    config->device = deviceConfig;
-    config->deviceClass = "temperature";
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "Temperature";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "°C";
+    String valueTemplate = "{{ value_json.temperature }}";
+    String deviceClass = "temperature";
+
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        temperatureDiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
 }
 
 void initBatteryDiscoveryConfig(struct discoveryConfig *config)
 {
-    config->configTopic =
+    String configurationTopic =
         (String)TOPIC_DISCOVERY +
         batteryDiscoveryIdentifier +
         (String)TOPIC_BATTERY +
         (String)TOPIC_CONFIG;
-    config->uniqueId = batteryDiscoveryIdentifier;
-    config->name = "Battery";
-    config->stateTopic = state.mqttTopic + (String)TOPIC_STATE;
-    config->unitOfMeasure = "%";
-    config->valueTemplate = "{{ value_json.battery }}";
-    config->device = deviceConfig;
-    config->deviceClass = "battery";
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "Battery";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "°C";
+    String valueTemplate = "{{ value_json.battery }}";
+    String deviceClass = "battery";
+
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        batteryDiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
 }
 
 void handleWifiMqtt(struct state *oldstate, struct state *state)

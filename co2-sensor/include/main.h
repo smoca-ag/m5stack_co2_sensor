@@ -66,6 +66,15 @@
 #define MQTT_USERNAME_LEN 24
 #define MQTT_KEY_LEN 32
 
+#define DISCOVERY_IDENTIFIERS_LEN 72
+#define DISCOVERY_DEVICE_MODEL_NAME_LEN 24
+#define DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN 16
+#define DISCOVERY_UNIQUE_ID_LEN 10
+#define DISCOVERY_DEVICE_NAME_CLASS_LEN 32
+#define DISCOVERY_TOPIC_LEN 72
+#define DISCOVERY_VALUE_TEMPLATE_LEN 32
+#define DISCOVERY_UNIT_OF_MEASURE_LEN 8
+
 #define WIFI_SCAN_INTERVAL 5000L
 #define WIFI_CONNECT_TIMEOUT 5000L
 #define MQTT_INTERVAL 2000L
@@ -206,21 +215,21 @@ struct state
 
 struct discoveryDeviceConfig
 {
-    String identifiers;
-    String name;
-    String model;
-    String manufacturer;
+    char identifiers[DISCOVERY_IDENTIFIERS_LEN];
+    char name[MQTT_DEVICENAME_LEN];
+    char model[DISCOVERY_DEVICE_MODEL_NAME_LEN];
+    char manufacturer[DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN];
 };
 
 struct discoveryConfig
 {
-    String configTopic;
-    String uniqueId;
-    String name;
-    String stateTopic;
-    String unitOfMeasure;
-    String valueTemplate;
-    String deviceClass;
+    char configTopic[MQTT_TOPIC_LEN];
+    char uniqueId[DISCOVERY_UNIQUE_ID_LEN];
+    char name[DISCOVERY_DEVICE_NAME_CLASS_LEN];
+    char stateTopic[MQTT_TOPIC_LEN];
+    char unitOfMeasure[DISCOVERY_UNIT_OF_MEASURE_LEN];
+    char valueTemplate[DISCOVERY_VALUE_TEMPLATE_LEN];
+    char deviceClass[DISCOVERY_DEVICE_NAME_CLASS_LEN];
     discoveryDeviceConfig device;
 };
 
@@ -249,6 +258,18 @@ void initAirSensor();
 void initAsyncWifiManager(struct state *state);
 
 void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config);
+
+void initDiscoveryValueConfig(
+    struct discoveryConfig *config,
+    String configurationTopic,
+    String uniqueId,
+    String stateTopic,
+    String name,
+    String topic,
+    String unitOfMeasure,
+    String valueTemplate,
+    String deviceClass
+);
 
 void initCo2DiscoveryConfig(struct discoveryConfig *config);
 
