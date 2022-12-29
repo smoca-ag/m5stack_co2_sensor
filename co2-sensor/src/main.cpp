@@ -490,10 +490,10 @@ void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config)
     String deviceModel = (String)HOMEASSISTANT_DEVICE_MODEL_Value;
     String manufacturer = (String)HOMEASSISTANT_DEVICE_MANUFACTURER_Value;
 
-    strncpy(config->identifiers, identifiers.c_str(), DISCOVERY_IDENTIFIERS_LEN);
-    strncpy(config->name, deviceName.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
-    strncpy(config->model, deviceModel.c_str(), DISCOVERY_DEVICE_MODEL_NAME_LEN);
-    strncpy(config->manufacturer, manufacturer.c_str(), DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN);
+    strlcpy(config->identifiers, identifiers.c_str(), DISCOVERY_IDENTIFIERS_LEN);
+    strlcpy(config->name, deviceName.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    strlcpy(config->model, deviceModel.c_str(), DISCOVERY_DEVICE_MODEL_NAME_LEN);
+    strlcpy(config->manufacturer, manufacturer.c_str(), DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN);
 }
 
 void initDiscoveryValueConfig(
@@ -509,13 +509,13 @@ void initDiscoveryValueConfig(
 )
 {
     config->device = deviceConfig;
-    strncpy(config->configTopic, configurationTopic.c_str(), DISCOVERY_TOPIC_LEN);
-    strncpy(config->uniqueId, uniqueId.c_str(), DISCOVERY_UNIQUE_ID_LEN);
-    strncpy(config->name, name.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
-    strncpy(config->stateTopic, topic.c_str(), DISCOVERY_TOPIC_LEN);
-    strncpy(config->unitOfMeasure, unitOfMeasure.c_str(), DISCOVERY_UNIT_OF_MEASURE_LEN);
-    strncpy(config->valueTemplate, valueTemplate.c_str(), DISCOVERY_VALUE_TEMPLATE_LEN);
-    strncpy(config->deviceClass, deviceClass.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    strlcpy(config->configTopic, configurationTopic.c_str(), DISCOVERY_TOPIC_LEN);
+    strlcpy(config->uniqueId, uniqueId.c_str(), DISCOVERY_UNIQUE_ID_LEN);
+    strlcpy(config->name, name.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    strlcpy(config->stateTopic, topic.c_str(), DISCOVERY_TOPIC_LEN);
+    strlcpy(config->unitOfMeasure, unitOfMeasure.c_str(), DISCOVERY_UNIT_OF_MEASURE_LEN);
+    strlcpy(config->valueTemplate, valueTemplate.c_str(), DISCOVERY_VALUE_TEMPLATE_LEN);
+    strlcpy(config->deviceClass, deviceClass.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
 }
 
 void initCo2DiscoveryConfig(struct discoveryConfig *config)
