@@ -59,6 +59,7 @@ TFT_eSprite DisbuffBody = TFT_eSprite(&M5.Lcd);
 uint64_t chipid = ESP.getEfuseMac(); // The chip ID is essentially its MAC address(length: 6 bytes).
 uint16_t chip = (uint16_t)(chipid >> 32);
 
+
 String ssid = "smoca CO2-" + String(chip, HEX) + String((uint32_t)chipid, HEX);
 IPAddress stationIP = IPAddress(0, 0, 0, 0);
 IPAddress gatewayIP = IPAddress(192, 168, 2, 1);
@@ -93,6 +94,25 @@ ESPAsync_WMParameter *mqttPassword;
 
 WiFiClient client;
 PubSubClient mqtt(client);
+
+// MQTT discovery data configurations
+struct discoveryDeviceConfig deviceConfig;
+struct discoveryConfig co2Config;
+struct discoveryConfig humidityConfig;
+struct discoveryConfig temperatureConfig;
+struct discoveryConfig batteryConfig;
+
+// MQTT Discovery unique identifiers
+String identifier = String(chip, HEX) + String((uint32_t)chipid, HEX);
+String co2DiscoveryIdentifier = identifier + "-1";
+String humidityDiscoveryIdentifier = identifier + "-2";
+String temperatureDiscoveryIdentifier = identifier + "-3";
+String batteryDiscoveryIdentifier = identifier + "-4";
+String identifiers =
+    co2DiscoveryIdentifier + ", " +
+    humidityDiscoveryIdentifier + ", " +
+    temperatureDiscoveryIdentifier + ", " +
+    batteryDiscoveryIdentifier;
 
 // statistics
 unsigned long cycle;
@@ -160,6 +180,20 @@ void setup()
     initAirSensor();
     initAsyncWifiManager(&state);
     initSTAIPConfigStruct(WM_STA_IPconfig);
+    initDeviceDiscoveryConfig(&deviceConfig);
+    initCo2DiscoveryConfig(&co2Config);
+    initHumidityDiscoveryConfig(&humidityConfig);
+    initTemperatureDiscoveryConfig(&temperatureConfig);
+    initBatteryDiscoveryConfig(&batteryConfig);
+
+    if (mqtt.connected()) {
+        sendMQTTDiscoveryMessages(
+            &co2Config,
+            &humidityConfig,
+            &temperatureConfig,
+            &batteryConfig
+        );
+    }
 
 #if LWIP_SNMP
     const struct snmp_obj_id device_enterprise_oid = {8, {1, 3, 6, 1, 4, 1, 58049, 1}};
@@ -294,6 +328,14 @@ void loadStateFile()
         strncpy(state.password, password.c_str(), MAX_CP_PASSWORD_LEN);
         strncpy(state.newest_version, newest_version.c_str(), VERSION_NUMBER_LEN);
         Serial.println("Loaded state file.");
+        if (mqtt.connected()) {
+            sendMQTTDiscoveryMessages(
+                &co2Config,
+                &humidityConfig,
+                &temperatureConfig,
+                &batteryConfig
+            );
+        }
     }
     else
     {
@@ -325,6 +367,15 @@ void saveStateFile(struct state *oldstate, struct state *state)
         (String)state->newest_version + "\n");
     f.close();
     Serial.println("State file saved");
+
+    if (mqtt.connected()) {
+        sendMQTTDiscoveryMessages(
+            &co2Config,
+            &humidityConfig,
+            &temperatureConfig,
+            &batteryConfig
+        );
+    }
 }
 
 void initSTAIPConfigStruct(WiFi_STA_IPConfig &in_WM_STA_IPconfig)
@@ -431,6 +482,148 @@ void initAirSensor()
 
     airSensor.setTemperatureOffset(5.5);
     airSensor.setAltitudeCompensation(440);
+}
+
+void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config)
+{
+    String deviceName = state.mqttDevice ? state.mqttDevice : "CO2 Sensor " + identifier;
+    String deviceModel = (String)HOMEASSISTANT_DEVICE_MODEL_Value;
+    String manufacturer = (String)HOMEASSISTANT_DEVICE_MANUFACTURER_Value;
+
+    strlcpy(config->identifiers, identifiers.c_str(), DISCOVERY_IDENTIFIERS_LEN);
+    strlcpy(config->name, deviceName.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    strlcpy(config->model, deviceModel.c_str(), DISCOVERY_DEVICE_MODEL_NAME_LEN);
+    strlcpy(config->manufacturer, manufacturer.c_str(), DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN);
+}
+
+void initDiscoveryValueConfig(
+    struct discoveryConfig *config,
+    String configurationTopic,
+    String uniqueId,
+    String stateTopic,
+    String name,
+    String topic,
+    String unitOfMeasure,
+    String valueTemplate,
+    String deviceClass
+)
+{
+    config->device = deviceConfig;
+    strlcpy(config->configTopic, configurationTopic.c_str(), DISCOVERY_TOPIC_LEN);
+    strlcpy(config->uniqueId, uniqueId.c_str(), DISCOVERY_UNIQUE_ID_LEN);
+    strlcpy(config->name, name.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    strlcpy(config->stateTopic, topic.c_str(), DISCOVERY_TOPIC_LEN);
+    strlcpy(config->unitOfMeasure, unitOfMeasure.c_str(), DISCOVERY_UNIT_OF_MEASURE_LEN);
+    strlcpy(config->valueTemplate, valueTemplate.c_str(), DISCOVERY_VALUE_TEMPLATE_LEN);
+    strlcpy(config->deviceClass, deviceClass.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+}
+
+void initCo2DiscoveryConfig(struct discoveryConfig *config)
+{
+    String configurationTopic =
+        (String)TOPIC_DISCOVERY +
+        co2DiscoveryIdentifier +
+        (String)TOPIC_CO2 +
+        (String)TOPIC_CONFIG;
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "CO2";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "ppm";
+    String valueTemplate = "{{ value_json.carbon_dioxide }}";
+    String deviceClass = "carbon_dioxide";
+
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        co2DiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
+}
+
+void initHumidityDiscoveryConfig(struct discoveryConfig *config)
+{
+    String configurationTopic =
+        (String)TOPIC_DISCOVERY +
+        humidityDiscoveryIdentifier +
+        (String)TOPIC_HUMIDITY +
+        (String)TOPIC_CONFIG;
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "Humidity";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "%";
+    String valueTemplate = "{{ value_json.humidity }}";
+    String deviceClass = "humidity";
+    
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        humidityDiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
+}
+
+void initTemperatureDiscoveryConfig(struct discoveryConfig *config)
+{
+    String configurationTopic =
+        (String)TOPIC_DISCOVERY +
+        temperatureDiscoveryIdentifier +
+        (String)TOPIC_TEMPERATURE +
+        (String)TOPIC_CONFIG;
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "Temperature";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "°C";
+    String valueTemplate = "{{ value_json.temperature }}";
+    String deviceClass = "temperature";
+
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        temperatureDiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
+}
+
+void initBatteryDiscoveryConfig(struct discoveryConfig *config)
+{
+    String configurationTopic =
+        (String)TOPIC_DISCOVERY +
+        batteryDiscoveryIdentifier +
+        (String)TOPIC_BATTERY +
+        (String)TOPIC_CONFIG;
+    String stateTopic = state.mqttTopic + (String)TOPIC_STATE;
+    String name = "Battery";
+    String topic = state.mqttTopic + (String)TOPIC_STATE;
+    String unitOfMeasure = "°C";
+    String valueTemplate = "{{ value_json.battery }}";
+    String deviceClass = "battery";
+
+    initDiscoveryValueConfig(
+        config,
+        configurationTopic,
+        batteryDiscoveryIdentifier,
+        stateTopic,
+        name,
+        topic,
+        unitOfMeasure,
+        valueTemplate,
+        deviceClass
+    );
 }
 
 void handleWifiMqtt(struct state *oldstate, struct state *state)
@@ -701,7 +894,15 @@ void handleWifiMqtt(struct state *oldstate, struct state *state)
             }
 
             if (mqtt.connected())
+            {
                 state->connectionState = WiFi_up_MQTT_up;
+                sendMQTTDiscoveryMessages(
+                    &co2Config,
+                    &humidityConfig,
+                    &temperatureConfig,
+                    &batteryConfig
+                );
+            }
             else
             {
                 nextMqttConnection = currentMillis + MQTT_INTERVAL;
@@ -743,10 +944,23 @@ void handleWifiMqtt(struct state *oldstate, struct state *state)
                     String co2Topic = (String)state->mqttTopic + (String)TOPIC_CO2;
                     String humidityTopic = (String)state->mqttTopic + (String)TOPIC_HUMIDITY;
                     String temperatureTopic = (String)state->mqttTopic + (String)TOPIC_TEMPERATURE;
+                    String batteryTopic = (String)state->mqttTopic + (String)TOPIC_BATTERY;
+                    String stateTopic = (String)state->mqttTopic + (String)TOPIC_STATE;
 
                     String co2 = (String)state->co2_ppm;
                     String humidity = (String)((double)state->humidity_percent / 10);
                     String temperature = (String)((double)state->temperature_celsius / 10);
+                    String battery = (String)state->battery_percent;
+
+                    DynamicJsonDocument stateJson(1024);
+                    char stateBuffer[256];
+
+                    stateJson[HOMEASSISTANT_STATE_CO2_Label] = co2;
+                    stateJson[HOMEASSISTANT_STATE_HUMIDITY_Label] = humidity;
+                    stateJson[HOMEASSISTANT_STATE_TEMPERATURE_Label] = temperature;
+                    stateJson[HOMEASSISTANT_STATE_BATTERY_Label] = battery;
+
+                    size_t n = serializeJson(stateJson, stateBuffer);
 
                     if (mqtt.publish((const char *)co2Topic.c_str(), (const char *)co2.c_str()))
                         Serial.println("Published co2 to MQTT");
@@ -757,6 +971,13 @@ void handleWifiMqtt(struct state *oldstate, struct state *state)
                     if (mqtt.publish((const char *)temperatureTopic.c_str(),
                                      (const char *)temperature.c_str()))
                         Serial.println("Published temperature to MQTT");
+
+                    if (mqtt.publish((const char*)batteryTopic.c_str(),
+                                     (const char*)battery.c_str()))
+                        Serial.println("Published battery to MQTT");
+                    if (mqtt.publish((const char*)stateTopic.c_str(),
+                                     stateBuffer, n))
+                        Serial.println("Published device state to MQTT");
                 }
 
                 nextMqttPublish = currentMillis + MQTT_PUBLISH_INTERVAL;
@@ -796,6 +1017,42 @@ void displayIPConfigStruct(WiFi_STA_IPConfig in_WM_STA_IPconfig)
     LOGERROR3(F("dns1IP ="), in_WM_STA_IPconfig._sta_static_dns1, ", dns2IP =",
               in_WM_STA_IPconfig._sta_static_dns2);
 #endif
+}
+
+void sendMQTTDiscoveryMessage(struct discoveryConfig* config)
+{
+    uint8_t buffer[512];
+    String topic = config->configTopic;
+    DynamicJsonDocument json(1024);
+    JsonObject device  = json.createNestedObject((String)HOMEASSISTANT_DEVICE_Label);
+
+    device[HOMEASSISTANT_DEVICE_IDENTIFIERS_Label] = config->device.identifiers;
+    device[HOMEASSISTANT_DEVICE_NAME_Label] = config->device.name;
+    device[HOMEASSISTANT_DEVICE_MODEL_Label] = config->device.model;
+    device[HOMEASSISTANT_DEVICE_MANUFACTURER_Label] = config->device.manufacturer;
+    json[HOMEASSISTANT_UNIQUE_ID_Label] = config->uniqueId;
+    json[HOMEASSISTANT_NAME_Label] = config->name;
+    json[HOMEASSISTANT_STATE_TOPIC_Label] = config->stateTopic;
+    json[HOMEASSISTANT_UNIT_OF_MEASURE_Label] = config->unitOfMeasure;
+    json[HOMEASSISTANT_VALUE_TEMPLATE_Label] = config->valueTemplate;
+    json[HOMEASSISTANT_DEVICE_CLASS_Label] = config->deviceClass;
+    
+    size_t n = serializeJson(json, buffer);
+    mqtt.publish((const char*)topic.c_str(), buffer, n, true);
+}
+
+void sendMQTTDiscoveryMessages(
+    struct discoveryConfig* co2Config,
+    struct discoveryConfig* humidityConfig,
+    struct discoveryConfig* temperatureConfig,
+    struct discoveryConfig* batteryConfig
+)
+{
+    Serial.println("Sending discovery messages");
+    sendMQTTDiscoveryMessage(co2Config);
+    sendMQTTDiscoveryMessage(humidityConfig);
+    sendMQTTDiscoveryMessage(temperatureConfig);
+    sendMQTTDiscoveryMessage(batteryConfig);
 }
 
 void loadMQTTConfig()

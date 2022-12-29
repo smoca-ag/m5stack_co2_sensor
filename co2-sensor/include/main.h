@@ -25,9 +25,32 @@
 #define MQTT_FILENAME "/mqtt.json"
 #define CONFIG_FILENAME "/wifi_config"
 
+#define TOPIC_DISCOVERY "homeassistant/sensor/"
 #define TOPIC_CO2 "/co2"
 #define TOPIC_HUMIDITY "/humidity"
 #define TOPIC_TEMPERATURE "/temperature"
+#define TOPIC_BATTERY "/battery"
+#define TOPIC_CONFIG "/config"
+#define TOPIC_STATE "/state"
+
+#define HOMEASSISTANT_UNIQUE_ID_Label "unique_id"
+#define HOMEASSISTANT_NAME_Label "name"
+#define HOMEASSISTANT_STATE_TOPIC_Label "state_topic"
+#define HOMEASSISTANT_UNIT_OF_MEASURE_Label "unit_of_measure"
+#define HOMEASSISTANT_VALUE_TEMPLATE_Label "value_template"
+#define HOMEASSISTANT_DEVICE_Label "device"
+#define HOMEASSISTANT_DEVICE_IDENTIFIERS_Label "identifiers"
+#define HOMEASSISTANT_DEVICE_NAME_Label "name"
+#define HOMEASSISTANT_DEVICE_MODEL_Label "model"
+#define HOMEASSISTANT_DEVICE_MANUFACTURER_Label "manufacturer"
+#define HOMEASSISTANT_DEVICE_CLASS_Label "device_class"
+#define HOMEASSISTANT_STATE_CO2_Label "carbon_dioxide"
+#define HOMEASSISTANT_STATE_HUMIDITY_Label "humidity"
+#define HOMEASSISTANT_STATE_TEMPERATURE_Label "temperature"
+#define HOMEASSISTANT_STATE_BATTERY_Label "battery"
+
+#define HOMEASSISTANT_DEVICE_MODEL_Value "Smoca CO2 Sensor"
+#define HOMEASSISTANT_DEVICE_MANUFACTURER_Value "Smoca AG"
 
 #define MQTT_SERVER_Label "MQTT_SERVER_Label"
 #define MQTT_SERVERPORT_Label "MQTT_SERVERPORT_Label"
@@ -42,6 +65,15 @@
 #define MQTT_TOPIC_LEN 64
 #define MQTT_USERNAME_LEN 24
 #define MQTT_KEY_LEN 32
+
+#define DISCOVERY_IDENTIFIERS_LEN 72
+#define DISCOVERY_DEVICE_MODEL_NAME_LEN 24
+#define DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN 16
+#define DISCOVERY_UNIQUE_ID_LEN 16
+#define DISCOVERY_DEVICE_NAME_CLASS_LEN 32
+#define DISCOVERY_TOPIC_LEN 72
+#define DISCOVERY_VALUE_TEMPLATE_LEN 32
+#define DISCOVERY_UNIT_OF_MEASURE_LEN 8
 
 #define WIFI_SCAN_INTERVAL 5000L
 #define WIFI_CONNECT_TIMEOUT 5000L
@@ -181,6 +213,26 @@ struct state
     bool is_screen_rotated = false;
 };
 
+struct discoveryDeviceConfig
+{
+    char identifiers[DISCOVERY_IDENTIFIERS_LEN];
+    char name[MQTT_DEVICENAME_LEN];
+    char model[DISCOVERY_DEVICE_MODEL_NAME_LEN];
+    char manufacturer[DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN];
+};
+
+struct discoveryConfig
+{
+    char configTopic[MQTT_TOPIC_LEN];
+    char uniqueId[DISCOVERY_UNIQUE_ID_LEN];
+    char name[DISCOVERY_DEVICE_NAME_CLASS_LEN];
+    char stateTopic[MQTT_TOPIC_LEN];
+    char unitOfMeasure[DISCOVERY_UNIT_OF_MEASURE_LEN];
+    char valueTemplate[DISCOVERY_VALUE_TEMPLATE_LEN];
+    char deviceClass[DISCOVERY_DEVICE_NAME_CLASS_LEN];
+    discoveryDeviceConfig device;
+};
+
 struct graph
 {
     float co2[GRAPH_UNITS];
@@ -204,6 +256,28 @@ void initSD();
 void initAirSensor();
 
 void initAsyncWifiManager(struct state *state);
+
+void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config);
+
+void initDiscoveryValueConfig(
+    struct discoveryConfig *config,
+    String configurationTopic,
+    String uniqueId,
+    String stateTopic,
+    String name,
+    String topic,
+    String unitOfMeasure,
+    String valueTemplate,
+    String deviceClass
+);
+
+void initCo2DiscoveryConfig(struct discoveryConfig *config);
+
+void initHumidityDiscoveryConfig(struct discoveryConfig *config);
+
+void initTemperatureDiscoveryConfig(struct discoveryConfig *config);
+
+void initBatteryDiscoveryConfig(struct discoveryConfig *config);
 
 void handleWifiMqtt(struct state *oldstate, struct state *state);
 
@@ -240,6 +314,15 @@ bool MQTTConnect(struct state *state);
 void handleFirmware(struct state *oldstate, struct state *state);
 
 bool fetchRemoteVersion(struct state *state);
+
+void sendMQTTDiscoveryMessage(struct discoveryConfig *config);
+
+void sendMQTTDiscoveryMessages(
+    struct discoveryConfig *co2Config,
+    struct discoveryConfig *humidityConfig,
+    struct discoveryConfig *temperatureConfig,
+    struct discoveryConfig *batteryConfig
+);
 
 void updateScreenRotation(struct state *oldstate, struct state *state);
 
