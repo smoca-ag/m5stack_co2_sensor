@@ -79,6 +79,7 @@
 #define WIFI_CONNECT_TIMEOUT 5000L
 #define MQTT_INTERVAL 2000L
 #define MQTT_PUBLISH_INTERVAL 60000L
+#define STRCPY(dst, src) if (strlcpy(dst, src, sizeof(dst)) >= sizeof(dst)) { Serial.println("not enugh space in dst for src"); } 
 
 // hardware
 #include <m5stack_core2/pins_arduino.h>
