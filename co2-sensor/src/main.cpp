@@ -325,8 +325,8 @@ void loadStateFile()
         state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
         state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
         state.is_screen_rotated = is_screen_rotated == "1" ? true : false;
-        strncpy(state.password, password.c_str(), MAX_CP_PASSWORD_LEN);
-        strncpy(state.newest_version, newest_version.c_str(), VERSION_NUMBER_LEN);
+        strlcpy(state.password, password.c_str(), MAX_CP_PASSWORD_LEN);
+        strlcpy(state.newest_version, newest_version.c_str(), VERSION_NUMBER_LEN);
         Serial.println("Loaded state file.");
         if (mqtt.connected()) {
             sendMQTTDiscoveryMessages(
@@ -1083,22 +1083,22 @@ void loadMQTTConfig()
         serializeJsonPretty(json, Serial);
 
     if (json.containsKey(MQTT_SERVER_Label))
-        strncpy(state.mqttServer, json[MQTT_SERVER_Label], MQTT_SERVER_LEN);
+        strlcpy(state.mqttServer, json[MQTT_SERVER_Label], MQTT_SERVER_LEN);
 
     if (json.containsKey(MQTT_SERVERPORT_Label))
-        strncpy(state.mqttPort, json[MQTT_SERVERPORT_Label], MQTT_PORT_LEN);
+        strlcpy(state.mqttPort, json[MQTT_SERVERPORT_Label], MQTT_PORT_LEN);
 
     if (json.containsKey(MQTT_TOPIC_Label))
-        strncpy(state.mqttTopic, json[MQTT_TOPIC_Label], MQTT_TOPIC_LEN);
+        strlcpy(state.mqttTopic, json[MQTT_TOPIC_Label], MQTT_TOPIC_LEN);
 
     if (json.containsKey(MQTT_DEVICENAME_Label))
-        strncpy(state.mqttDevice, json[MQTT_DEVICENAME_Label], MQTT_DEVICENAME_LEN);
+        strlcpy(state.mqttDevice, json[MQTT_DEVICENAME_Label], MQTT_DEVICENAME_LEN);
 
     if (json.containsKey(MQTT_USERNAME_Label))
-        strncpy(state.mqttUser, json[MQTT_USERNAME_Label], MQTT_USERNAME_LEN);
+        strlcpy(state.mqttUser, json[MQTT_USERNAME_Label], MQTT_USERNAME_LEN);
 
     if (json.containsKey(MQTT_KEY_Label))
-        strncpy(state.mqttPassword, json[MQTT_KEY_Label], MQTT_KEY_LEN);
+        strlcpy(state.mqttPassword, json[MQTT_KEY_Label], MQTT_KEY_LEN);
 }
 
 void saveMQTTConfig(struct state *state)
@@ -1267,12 +1267,12 @@ void configPortalCallback()
 
     saveConfigPortalCredentials();
 
-    strncpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
-    strncpy(state.mqttPort, mqttPort->getValue(), MQTT_PORT_LEN);
-    strncpy(state.mqttTopic, mqttTopic->getValue(), MQTT_TOPIC_LEN);
-    strncpy(state.mqttDevice, mqttDevice->getValue(), MQTT_DEVICENAME_LEN);
-    strncpy(state.mqttUser, mqttUser->getValue(), MQTT_USERNAME_LEN);
-    strncpy(state.mqttPassword, mqttPassword->getValue(), MQTT_KEY_LEN);
+    strlcpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
+    strlcpy(state.mqttPort, mqttPort->getValue(), MQTT_PORT_LEN);
+    strlcpy(state.mqttTopic, mqttTopic->getValue(), MQTT_TOPIC_LEN);
+    strlcpy(state.mqttDevice, mqttDevice->getValue(), MQTT_DEVICENAME_LEN);
+    strlcpy(state.mqttUser, mqttUser->getValue(), MQTT_USERNAME_LEN);
+    strlcpy(state.mqttPassword, mqttPassword->getValue(), MQTT_KEY_LEN);
 
     saveMQTTConfig(&state);
     setMQTTServer(&state);
@@ -1291,19 +1291,9 @@ void saveConfigPortalCredentials()
             String tempSSID = asyncWifiManager->getSSID(i);
             String tempPW = asyncWifiManager->getPW(i);
 
-            if (strlen(tempSSID.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1)
-                strcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str());
-            else
-                strncpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str(),
-                        sizeof(WM_config.WiFi_Creds[i].wifi_ssid) - 1);
-
-            if (strlen(tempPW.c_str()) < sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1)
-                strcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str());
-            else
-                strncpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(),
-                        sizeof(WM_config.WiFi_Creds[i].wifi_pw) - 1);
+            strlcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_ssid));
+            strlcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw));
         }
-
         saveConfigData();
     }
 }
@@ -1334,7 +1324,7 @@ bool MQTTConnect(struct state *state)
         return true;
 
     char clientID[MQTT_DEVICENAME_LEN];
-    strncpy(clientID, (String)state->mqttDevice == "" ? ssid.c_str() : state->mqttDevice, MQTT_DEVICENAME_LEN);
+    strlcpy(clientID, (String)state->mqttDevice == "" ? ssid.c_str() : state->mqttDevice, MQTT_DEVICENAME_LEN);
 
     if ((String)state->mqttUser != "" && (String)state->mqttPassword != "")
     {
@@ -1442,7 +1432,7 @@ bool fetchRemoteVersion(struct state *state)
             return false;
         }
 
-        strncpy(state->newest_version, doc["version"].as<char *>(), VERSION_NUMBER_LEN);
+        strlcpy(state->newest_version, doc["version"].as<char *>(), VERSION_NUMBER_LEN);
         http.end();
         return true;
     }
@@ -1660,7 +1650,7 @@ void setPassword(struct state *state)
     if ((String)state->password == "" || String(state->password).length() < CP_PASSWORD_GENERATION_LEN)
     {
         String password = randomPassword(CP_PASSWORD_GENERATION_LEN);
-        strncpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
+        strlcpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
         Serial.print("New Password generated: ");
         Serial.println(state->password);
     }
