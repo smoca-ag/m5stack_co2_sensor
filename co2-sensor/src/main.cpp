@@ -325,8 +325,8 @@ void loadStateFile()
         state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
         state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
         state.is_screen_rotated = is_screen_rotated == "1" ? true : false;
-        strlcpy(state.password, password.c_str(), MAX_CP_PASSWORD_LEN);
-        strlcpy(state.newest_version, newest_version.c_str(), VERSION_NUMBER_LEN);
+        STRCPY(state.password, password.c_str());
+        STRCPY(state.newest_version, newest_version.c_str());
         Serial.println("Loaded state file.");
         if (mqtt.connected()) {
             sendMQTTDiscoveryMessages(
@@ -490,10 +490,10 @@ void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config)
     String deviceModel = (String)HOMEASSISTANT_DEVICE_MODEL_Value;
     String manufacturer = (String)HOMEASSISTANT_DEVICE_MANUFACTURER_Value;
 
-    strlcpy(config->identifiers, identifiers.c_str(), DISCOVERY_IDENTIFIERS_LEN);
-    strlcpy(config->name, deviceName.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
-    strlcpy(config->model, deviceModel.c_str(), DISCOVERY_DEVICE_MODEL_NAME_LEN);
-    strlcpy(config->manufacturer, manufacturer.c_str(), DISCOVERY_DEVICE_MANUFACTURER_NAME_LEN);
+    STRCPY(config->identifiers, identifiers.c_str());
+    STRCPY(config->name, deviceName.c_str());
+    STRCPY(config->model, deviceModel.c_str());
+    STRCPY(config->manufacturer, manufacturer.c_str());
 }
 
 void initDiscoveryValueConfig(
@@ -509,13 +509,13 @@ void initDiscoveryValueConfig(
 )
 {
     config->device = deviceConfig;
-    strlcpy(config->configTopic, configurationTopic.c_str(), DISCOVERY_TOPIC_LEN);
-    strlcpy(config->uniqueId, uniqueId.c_str(), DISCOVERY_UNIQUE_ID_LEN);
-    strlcpy(config->name, name.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
-    strlcpy(config->stateTopic, topic.c_str(), DISCOVERY_TOPIC_LEN);
-    strlcpy(config->unitOfMeasure, unitOfMeasure.c_str(), DISCOVERY_UNIT_OF_MEASURE_LEN);
-    strlcpy(config->valueTemplate, valueTemplate.c_str(), DISCOVERY_VALUE_TEMPLATE_LEN);
-    strlcpy(config->deviceClass, deviceClass.c_str(), DISCOVERY_DEVICE_NAME_CLASS_LEN);
+    STRCPY(config->configTopic, configurationTopic.c_str());
+    STRCPY(config->uniqueId, uniqueId.c_str());
+    STRCPY(config->name, name.c_str());
+    STRCPY(config->stateTopic, topic.c_str());
+    STRCPY(config->unitOfMeasure, unitOfMeasure.c_str());
+    STRCPY(config->valueTemplate, valueTemplate.c_str());
+    STRCPY(config->deviceClass, deviceClass.c_str());
 }
 
 void initCo2DiscoveryConfig(struct discoveryConfig *config)
@@ -1083,22 +1083,22 @@ void loadMQTTConfig()
         serializeJsonPretty(json, Serial);
 
     if (json.containsKey(MQTT_SERVER_Label))
-        strlcpy(state.mqttServer, json[MQTT_SERVER_Label], MQTT_SERVER_LEN);
+        STRCPY(state.mqttServer, json[MQTT_SERVER_Label].as<char *>());
 
     if (json.containsKey(MQTT_SERVERPORT_Label))
-        strlcpy(state.mqttPort, json[MQTT_SERVERPORT_Label], MQTT_PORT_LEN);
+        STRCPY(state.mqttPort, json[MQTT_SERVERPORT_Label].as<char *>());
 
     if (json.containsKey(MQTT_TOPIC_Label))
-        strlcpy(state.mqttTopic, json[MQTT_TOPIC_Label], MQTT_TOPIC_LEN);
+        STRCPY(state.mqttTopic, json[MQTT_TOPIC_Label].as<char *>());
 
     if (json.containsKey(MQTT_DEVICENAME_Label))
-        strlcpy(state.mqttDevice, json[MQTT_DEVICENAME_Label], MQTT_DEVICENAME_LEN);
+        STRCPY(state.mqttDevice, json[MQTT_DEVICENAME_Label].as<char *>());
 
     if (json.containsKey(MQTT_USERNAME_Label))
-        strlcpy(state.mqttUser, json[MQTT_USERNAME_Label], MQTT_USERNAME_LEN);
-
+        STRCPY(state.mqttUser, json[MQTT_USERNAME_Label].as<char *>());
+        
     if (json.containsKey(MQTT_KEY_Label))
-        strlcpy(state.mqttPassword, json[MQTT_KEY_Label], MQTT_KEY_LEN);
+        STRCPY(state.mqttPassword, json[MQTT_KEY_Label].as<char *>());
 }
 
 void saveMQTTConfig(struct state *state)
@@ -1267,12 +1267,12 @@ void configPortalCallback()
 
     saveConfigPortalCredentials();
 
-    strlcpy(state.mqttServer, mqttServer->getValue(), MQTT_SERVER_LEN);
-    strlcpy(state.mqttPort, mqttPort->getValue(), MQTT_PORT_LEN);
-    strlcpy(state.mqttTopic, mqttTopic->getValue(), MQTT_TOPIC_LEN);
-    strlcpy(state.mqttDevice, mqttDevice->getValue(), MQTT_DEVICENAME_LEN);
-    strlcpy(state.mqttUser, mqttUser->getValue(), MQTT_USERNAME_LEN);
-    strlcpy(state.mqttPassword, mqttPassword->getValue(), MQTT_KEY_LEN);
+    STRCPY(state.mqttServer, mqttServer->getValue());
+    STRCPY(state.mqttPort, mqttPort->getValue());
+    STRCPY(state.mqttTopic, mqttTopic->getValue());
+    STRCPY(state.mqttDevice, mqttDevice->getValue());
+    STRCPY(state.mqttUser, mqttUser->getValue());
+    STRCPY(state.mqttPassword, mqttPassword->getValue());
 
     saveMQTTConfig(&state);
     setMQTTServer(&state);
@@ -1291,8 +1291,8 @@ void saveConfigPortalCredentials()
             String tempSSID = asyncWifiManager->getSSID(i);
             String tempPW = asyncWifiManager->getPW(i);
 
-            strlcpy(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_ssid));
-            strlcpy(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str(), sizeof(WM_config.WiFi_Creds[i].wifi_pw));
+            STRCPY(WM_config.WiFi_Creds[i].wifi_ssid, tempSSID.c_str());
+            STRCPY(WM_config.WiFi_Creds[i].wifi_pw, tempPW.c_str());
         }
         saveConfigData();
     }
@@ -1324,7 +1324,8 @@ bool MQTTConnect(struct state *state)
         return true;
 
     char clientID[MQTT_DEVICENAME_LEN];
-    strlcpy(clientID, (String)state->mqttDevice == "" ? ssid.c_str() : state->mqttDevice, MQTT_DEVICENAME_LEN);
+    String device = (String)state->mqttDevice == "" ? ssid.c_str() : state->mqttDevice;
+    STRCPY(clientID, device.c_str());
 
     if ((String)state->mqttUser != "" && (String)state->mqttPassword != "")
     {
@@ -1431,8 +1432,7 @@ bool fetchRemoteVersion(struct state *state)
             Serial.println(error.f_str());
             return false;
         }
-
-        strlcpy(state->newest_version, doc["version"].as<char *>(), VERSION_NUMBER_LEN);
+        STRCPY(state->newest_version, doc["version"].as<char *>());
         http.end();
         return true;
     }
@@ -1650,7 +1650,7 @@ void setPassword(struct state *state)
     if ((String)state->password == "" || String(state->password).length() < CP_PASSWORD_GENERATION_LEN)
     {
         String password = randomPassword(CP_PASSWORD_GENERATION_LEN);
-        strlcpy(state->password, password.c_str(), MAX_CP_PASSWORD_LEN);
+        STRCPY(state->password, password.c_str());
         Serial.print("New Password generated: ");
         Serial.println(state->password);
     }
