@@ -505,7 +505,8 @@ void initDiscoveryValueConfig(
     String topic,
     String unitOfMeasure,
     String valueTemplate,
-    String deviceClass
+    String deviceClass,
+    String stateClass
 )
 {
     config->device = deviceConfig;
@@ -516,6 +517,7 @@ void initDiscoveryValueConfig(
     STRCPY(config->unitOfMeasure, unitOfMeasure.c_str());
     STRCPY(config->valueTemplate, valueTemplate.c_str());
     STRCPY(config->deviceClass, deviceClass.c_str());
+    STRCPY(config->stateClass, stateClass.c_str());
 }
 
 void initCo2DiscoveryConfig(struct discoveryConfig *config)
@@ -531,6 +533,7 @@ void initCo2DiscoveryConfig(struct discoveryConfig *config)
     String unitOfMeasure = "ppm";
     String valueTemplate = "{{ value_json.carbon_dioxide }}";
     String deviceClass = "carbon_dioxide";
+    String stateClass = String(HOMEASSISTANT_DEVICE_STATE_CLASS_Value);
 
     initDiscoveryValueConfig(
         config,
@@ -541,7 +544,8 @@ void initCo2DiscoveryConfig(struct discoveryConfig *config)
         topic,
         unitOfMeasure,
         valueTemplate,
-        deviceClass
+        deviceClass,
+        stateClass
     );
 }
 
@@ -558,6 +562,7 @@ void initHumidityDiscoveryConfig(struct discoveryConfig *config)
     String unitOfMeasure = "%";
     String valueTemplate = "{{ value_json.humidity }}";
     String deviceClass = "humidity";
+    String stateClass = String(HOMEASSISTANT_DEVICE_STATE_CLASS_Value);
     
     initDiscoveryValueConfig(
         config,
@@ -568,7 +573,8 @@ void initHumidityDiscoveryConfig(struct discoveryConfig *config)
         topic,
         unitOfMeasure,
         valueTemplate,
-        deviceClass
+        deviceClass,
+        stateClass
     );
 }
 
@@ -585,6 +591,7 @@ void initTemperatureDiscoveryConfig(struct discoveryConfig *config)
     String unitOfMeasure = "°C";
     String valueTemplate = "{{ value_json.temperature }}";
     String deviceClass = "temperature";
+    String stateClass = String(HOMEASSISTANT_DEVICE_STATE_CLASS_Value);
 
     initDiscoveryValueConfig(
         config,
@@ -595,7 +602,8 @@ void initTemperatureDiscoveryConfig(struct discoveryConfig *config)
         topic,
         unitOfMeasure,
         valueTemplate,
-        deviceClass
+        deviceClass,
+        stateClass
     );
 }
 
@@ -612,6 +620,7 @@ void initBatteryDiscoveryConfig(struct discoveryConfig *config)
     String unitOfMeasure = "°C";
     String valueTemplate = "{{ value_json.battery }}";
     String deviceClass = "battery";
+    String stateClass = String(HOMEASSISTANT_DEVICE_STATE_CLASS_Value);
 
     initDiscoveryValueConfig(
         config,
@@ -622,7 +631,8 @@ void initBatteryDiscoveryConfig(struct discoveryConfig *config)
         topic,
         unitOfMeasure,
         valueTemplate,
-        deviceClass
+        deviceClass,
+        stateClass
     );
 }
 
@@ -1036,6 +1046,7 @@ void sendMQTTDiscoveryMessage(struct discoveryConfig* config)
     json[HOMEASSISTANT_UNIT_OF_MEASURE_Label] = config->unitOfMeasure;
     json[HOMEASSISTANT_VALUE_TEMPLATE_Label] = config->valueTemplate;
     json[HOMEASSISTANT_DEVICE_CLASS_Label] = config->deviceClass;
+    json[HOMEASSISTANT_DEVICE_STATE_CLASS_Label] = config->stateClass;
     
     size_t n = serializeJson(json, buffer);
     mqtt.publish((const char*)topic.c_str(), buffer, n, true);

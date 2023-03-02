@@ -44,6 +44,7 @@
 #define HOMEASSISTANT_DEVICE_MODEL_Label "model"
 #define HOMEASSISTANT_DEVICE_MANUFACTURER_Label "manufacturer"
 #define HOMEASSISTANT_DEVICE_CLASS_Label "device_class"
+#define HOMEASSISTANT_DEVICE_STATE_CLASS_Label "state_class"
 #define HOMEASSISTANT_STATE_CO2_Label "carbon_dioxide"
 #define HOMEASSISTANT_STATE_HUMIDITY_Label "humidity"
 #define HOMEASSISTANT_STATE_TEMPERATURE_Label "temperature"
@@ -51,6 +52,7 @@
 
 #define HOMEASSISTANT_DEVICE_MODEL_Value "Smoca CO2 Sensor"
 #define HOMEASSISTANT_DEVICE_MANUFACTURER_Value "Smoca AG"
+#define HOMEASSISTANT_DEVICE_STATE_CLASS_Value "measurement"
 
 #define MQTT_SERVER_Label "MQTT_SERVER_Label"
 #define MQTT_SERVERPORT_Label "MQTT_SERVERPORT_Label"
@@ -74,6 +76,7 @@
 #define DISCOVERY_TOPIC_LEN 72
 #define DISCOVERY_VALUE_TEMPLATE_LEN 32
 #define DISCOVERY_UNIT_OF_MEASURE_LEN 8
+#define DISCOVERY_STATE_CLASS_LEN 16
 
 #define WIFI_SCAN_INTERVAL 5000L
 #define WIFI_CONNECT_TIMEOUT 5000L
@@ -231,6 +234,7 @@ struct discoveryConfig
     char unitOfMeasure[DISCOVERY_UNIT_OF_MEASURE_LEN];
     char valueTemplate[DISCOVERY_VALUE_TEMPLATE_LEN];
     char deviceClass[DISCOVERY_DEVICE_NAME_CLASS_LEN];
+    char stateClass[DISCOVERY_STATE_CLASS_LEN];
     discoveryDeviceConfig device;
 };
 
@@ -269,7 +273,8 @@ void initDiscoveryValueConfig(
     String topic,
     String unitOfMeasure,
     String valueTemplate,
-    String deviceClass
+    String deviceClass,
+    String stateClass
 );
 
 void initCo2DiscoveryConfig(struct discoveryConfig *config);
