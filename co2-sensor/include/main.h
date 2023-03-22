@@ -44,6 +44,7 @@
 #define HOMEASSISTANT_DEVICE_MODEL_Label "model"
 #define HOMEASSISTANT_DEVICE_MANUFACTURER_Label "manufacturer"
 #define HOMEASSISTANT_DEVICE_CLASS_Label "device_class"
+
 #define HOMEASSISTANT_STATE_CO2_Label "carbon_dioxide"
 #define HOMEASSISTANT_STATE_HUMIDITY_Label "humidity"
 #define HOMEASSISTANT_STATE_TEMPERATURE_Label "temperature"
