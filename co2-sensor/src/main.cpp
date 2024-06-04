@@ -74,7 +74,9 @@ IPAddress APStaticSN = IPAddress(255, 255, 255, 0);
 
 AsyncWebServer webServer(80);
 
-SCD30 airSensor;
+SCD30 airSensorSCD30;
+SCD4x airSensorSCD40;
+void* currentAirSensor;
 
 WM_Config WM_config;
 WiFi_STA_IPConfig WM_STA_IPconfig;
@@ -466,7 +468,21 @@ void initAirSensor()
 {
     Wire.begin(G32, G33);
 
-    if (airSensor.begin(Wire, state.auto_calibration_on) == false)
+    if (airSensorSCD30.begin(Wire, state.auto_calibration_on) == true)
+    {
+        currentAirSensor = &airSensorSCD30;
+        Serial.println("Air sensor SCD30 detected.");
+        airSensorSCD30.setTemperatureOffset(5.5);
+        airSensorSCD30.setAltitudeCompensation(440);
+    } 
+    else if (airSensorSCD40.begin(Wire, state.auto_calibration_on) == true)
+    {
+        currentAirSensor = &airSensorSCD40;
+        Serial.println("Air sensor SCD4x detected.");
+        airSensorSCD40.setTemperatureOffset(5.5);
+        airSensorSCD40.setSensorAltitude(440);
+    } 
+    else 
     {
         DisbuffValue.setTextColor(RED);
         Serial.println("Air sensor not detected. Please check wiring. Freezing...");
@@ -479,9 +495,6 @@ void initAirSensor()
             delay(1000);
         }
     }
-
-    airSensor.setTemperatureOffset(5.5);
-    airSensor.setAltitudeCompensation(440);
 }
 
 void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config)
@@ -1486,7 +1499,14 @@ void updateTouch(struct state *state)
         if (toggleAutoCalButton.wasPressed())
         {
             state->auto_calibration_on = !state->auto_calibration_on;
-            airSensor.setAutoSelfCalibration(state->auto_calibration_on);
+            if (currentAirSensor == &airSensorSCD30)
+            {
+                airSensorSCD30.setAutoSelfCalibration(state->auto_calibration_on);
+            } 
+            else if (currentAirSensor == &airSensorSCD40) 
+            {
+                airSensorSCD40.setAutomaticSelfCalibrationEnabled(state->auto_calibration_on);
+            }
         }
         if (submitCalibrationButton.wasPressed())
             state->menu_mode = menuModeCalibrationAlert;
@@ -1495,7 +1515,14 @@ void updateTouch(struct state *state)
     case menuModeCalibrationAlert:
         if (submitCalibrationButton.wasPressed())
         {
-            airSensor.setForcedRecalibrationFactor(state->calibration_value);
+            if (currentAirSensor == &airSensorSCD30)
+            {
+                airSensorSCD30.setForcedRecalibrationFactor(state->calibration_value);
+            } 
+            else if (currentAirSensor == &airSensorSCD40) 
+            {
+                airSensorSCD40.performForcedRecalibration(state->auto_calibration_on);
+            }
             state->menu_mode = menuModeCalibrationSettings;
             state->cal_info = infoCalSuccess;
         }
@@ -1638,11 +1665,17 @@ void updateCo2(struct state *state)
         return;
     }
 
-    if (airSensor.dataAvailable())
+    if (airSensorSCD30.dataAvailable())
     {
-        state->co2_ppm = airSensor.getCO2();
-        state->temperature_celsius = airSensor.getTemperature() * 10;
-        state->humidity_percent = airSensor.getHumidity() * 10;
+        state->co2_ppm = airSensorSCD30.getCO2();
+        state->temperature_celsius = airSensorSCD30.getTemperature();
+        state->humidity_percent = airSensorSCD30.getHumidity();
+    }
+    else if (airSensorSCD40.getDataReadyStatus())
+    {
+        state->co2_ppm = airSensorSCD40.getCO2();
+        state->temperature_celsius = airSensorSCD40.getTemperature();
+        state->humidity_percent = airSensorSCD40.getHumidity();
     }
 }
 
