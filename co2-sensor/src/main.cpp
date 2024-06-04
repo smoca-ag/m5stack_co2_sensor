@@ -1520,9 +1520,11 @@ void updateTouch(struct state *state)
             {
                 airSensorSCD30.setForcedRecalibrationFactor(state->calibration_value);
             } 
-            else if (currentAirSensor == &airSensorSCD40) 
+            else if (currentAirSensor == &airSensorSCD40)
             {
-                airSensorSCD40.performForcedRecalibration(state->auto_calibration_on);
+                airSensorSCD40.stopPeriodicMeasurement();
+                airSensorSCD40.performForcedRecalibration(state->calibration_value);
+                airSensorSCD40.startPeriodicMeasurement();
             }
             state->menu_mode = menuModeCalibrationSettings;
             state->cal_info = infoCalSuccess;
@@ -1670,16 +1672,16 @@ void updateCo2(struct state *state)
         Serial.println("Reading Data from SCD30...");
 
         state->co2_ppm = airSensorSCD30.getCO2();
-        state->temperature_celsius = airSensorSCD30.getTemperature();
-        state->humidity_percent = airSensorSCD30.getHumidity();
+        state->temperature_celsius = airSensorSCD30.getTemperature() * 10;
+        state->humidity_percent = airSensorSCD30.getHumidity() * 10;
     }
     else if (currentAirSensor == &airSensorSCD40 && airSensorSCD40.readMeasurement())
     {
         Serial.println("Reading Data from SCD40...");
 
         state->co2_ppm = airSensorSCD40.getCO2();
-        state->temperature_celsius = airSensorSCD40.getTemperature();
-        state->humidity_percent = airSensorSCD40.getHumidity();
+        state->temperature_celsius = airSensorSCD40.getTemperature() * 10;
+        state->humidity_percent = airSensorSCD40.getHumidity() * 10;
     }
 }
 
