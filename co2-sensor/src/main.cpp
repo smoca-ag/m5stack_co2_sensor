@@ -481,6 +481,7 @@ void initAirSensor()
         Serial.println("Air sensor SCD4x detected.");
         airSensorSCD40.setTemperatureOffset(5.5);
         airSensorSCD40.setSensorAltitude(440);
+        airSensorSCD40.startPeriodicMeasurement();
     } 
     else 
     {
@@ -1664,15 +1665,18 @@ void updateCo2(struct state *state)
     {
         return;
     }
-
-    if (airSensorSCD30.dataAvailable())
+    if (currentAirSensor == &airSensorSCD30 && airSensorSCD30.dataAvailable())
     {
+        Serial.println("Reading Data from SCD30...");
+
         state->co2_ppm = airSensorSCD30.getCO2();
         state->temperature_celsius = airSensorSCD30.getTemperature();
         state->humidity_percent = airSensorSCD30.getHumidity();
     }
-    else if (airSensorSCD40.getDataReadyStatus())
+    else if (currentAirSensor == &airSensorSCD40 && airSensorSCD40.readMeasurement())
     {
+        Serial.println("Reading Data from SCD40...");
+
         state->co2_ppm = airSensorSCD40.getCO2();
         state->temperature_celsius = airSensorSCD40.getTemperature();
         state->humidity_percent = airSensorSCD40.getHumidity();
