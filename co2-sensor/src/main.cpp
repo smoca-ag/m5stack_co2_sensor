@@ -81,7 +81,7 @@ void* currentAirSensor;
 WM_Config WM_config;
 WiFi_STA_IPConfig WM_STA_IPconfig;
 
-DNSServer dnsServer;
+AsyncDNSServer dnsServer;
 String Router_SSID;
 String Router_Pass;
 
@@ -2527,23 +2527,6 @@ void setDisplayPower(bool state)
         // Disable DC-DC3, display backlight
         WriteByte(0x12, (ReadByte(0x12) & (~2)));
     }
-}
-
-uint32_t Read32bit(uint8_t Addr)
-{
-    uint32_t ReData = 0;
-    Wire1.beginTransmission(0x34);
-    Wire1.write(Addr);
-    Wire1.endTransmission();
-    Wire1.requestFrom(0x34, 4);
-
-    for (int i = 0; i < 4; i++)
-    {
-        ReData <<= 8;
-        ReData |= Wire1.read();
-    }
-
-    return ReData;
 }
 
 uint32_t ReadByte(uint8_t Addr)
