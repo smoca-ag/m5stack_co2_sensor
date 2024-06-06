@@ -74,12 +74,14 @@ IPAddress APStaticSN = IPAddress(255, 255, 255, 0);
 
 AsyncWebServer webServer(80);
 
-SCD30 airSensor;
+SCD30 airSensorSCD30;
+SCD4x airSensorSCD40;
+void* currentAirSensor;
 
 WM_Config WM_config;
 WiFi_STA_IPConfig WM_STA_IPconfig;
 
-DNSServer dnsServer;
+AsyncDNSServer dnsServer;
 String Router_SSID;
 String Router_Pass;
 
@@ -466,7 +468,22 @@ void initAirSensor()
 {
     Wire.begin(G32, G33);
 
-    if (airSensor.begin(Wire, state.auto_calibration_on) == false)
+    if (airSensorSCD30.begin(Wire, state.auto_calibration_on) == true)
+    {
+        currentAirSensor = &airSensorSCD30;
+        Serial.println("Air sensor SCD30 detected.");
+        airSensorSCD30.setTemperatureOffset(7.2);
+        airSensorSCD30.setAltitudeCompensation(440);
+    } 
+    else if (airSensorSCD40.begin(Wire, state.auto_calibration_on) == true)
+    {
+        currentAirSensor = &airSensorSCD40;
+        Serial.println("Air sensor SCD4x detected.");
+        airSensorSCD40.setTemperatureOffset(8.0);
+        airSensorSCD40.setSensorAltitude(440);
+        airSensorSCD40.startPeriodicMeasurement();
+    } 
+    else 
     {
         DisbuffValue.setTextColor(RED);
         Serial.println("Air sensor not detected. Please check wiring. Freezing...");
@@ -479,9 +496,6 @@ void initAirSensor()
             delay(1000);
         }
     }
-
-    airSensor.setTemperatureOffset(5.5);
-    airSensor.setAltitudeCompensation(440);
 }
 
 void initDeviceDiscoveryConfig(struct discoveryDeviceConfig *config)
@@ -1486,7 +1500,14 @@ void updateTouch(struct state *state)
         if (toggleAutoCalButton.wasPressed())
         {
             state->auto_calibration_on = !state->auto_calibration_on;
-            airSensor.setAutoSelfCalibration(state->auto_calibration_on);
+            if (currentAirSensor == &airSensorSCD30)
+            {
+                airSensorSCD30.setAutoSelfCalibration(state->auto_calibration_on);
+            } 
+            else if (currentAirSensor == &airSensorSCD40) 
+            {
+                airSensorSCD40.setAutomaticSelfCalibrationEnabled(state->auto_calibration_on);
+            }
         }
         if (submitCalibrationButton.wasPressed())
             state->menu_mode = menuModeCalibrationAlert;
@@ -1495,7 +1516,16 @@ void updateTouch(struct state *state)
     case menuModeCalibrationAlert:
         if (submitCalibrationButton.wasPressed())
         {
-            airSensor.setForcedRecalibrationFactor(state->calibration_value);
+            if (currentAirSensor == &airSensorSCD30)
+            {
+                airSensorSCD30.setForcedRecalibrationFactor(state->calibration_value);
+            } 
+            else if (currentAirSensor == &airSensorSCD40)
+            {
+                airSensorSCD40.stopPeriodicMeasurement();
+                airSensorSCD40.performForcedRecalibration(state->calibration_value);
+                airSensorSCD40.startPeriodicMeasurement();
+            }
             state->menu_mode = menuModeCalibrationSettings;
             state->cal_info = infoCalSuccess;
         }
@@ -1637,12 +1667,21 @@ void updateCo2(struct state *state)
     {
         return;
     }
-
-    if (airSensor.dataAvailable())
+    if (currentAirSensor == &airSensorSCD30 && airSensorSCD30.dataAvailable())
     {
-        state->co2_ppm = airSensor.getCO2();
-        state->temperature_celsius = airSensor.getTemperature() * 10;
-        state->humidity_percent = airSensor.getHumidity() * 10;
+        Serial.println("Reading Data from SCD30...");
+
+        state->co2_ppm = airSensorSCD30.getCO2();
+        state->temperature_celsius = airSensorSCD30.getTemperature() * 10;
+        state->humidity_percent = airSensorSCD30.getHumidity() * 10;
+    }
+    else if (currentAirSensor == &airSensorSCD40 && airSensorSCD40.readMeasurement())
+    {
+        Serial.println("Reading Data from SCD40...");
+
+        state->co2_ppm = airSensorSCD40.getCO2();
+        state->temperature_celsius = airSensorSCD40.getTemperature() * 10;
+        state->humidity_percent = airSensorSCD40.getHumidity() * 10;
     }
 }
 
@@ -2490,23 +2529,6 @@ void setDisplayPower(bool state)
         // Disable DC-DC3, display backlight
         WriteByte(0x12, (ReadByte(0x12) & (~2)));
     }
-}
-
-uint32_t Read32bit(uint8_t Addr)
-{
-    uint32_t ReData = 0;
-    Wire1.beginTransmission(0x34);
-    Wire1.write(Addr);
-    Wire1.endTransmission();
-    Wire1.requestFrom(0x34, 4);
-
-    for (int i = 0; i < 4; i++)
-    {
-        ReData <<= 8;
-        ReData |= Wire1.read();
-    }
-
-    return ReData;
 }
 
 uint32_t ReadByte(uint8_t Addr)
