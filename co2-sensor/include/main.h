@@ -141,8 +141,10 @@ enum graphMode
 enum menuMode
 {
     menuModeGraphs,
-    menuModeCalibrationSettings,
-    menuModeCalibrationAlert,
+    menuModeCalibrationPpmSettings,
+    menuModeCalibrationTempSettings,
+    menuModeCalibrationPpmAlert,
+    menuModeCalibrationTempAlert,
     menuModeWiFiSettings,
     menuModeMQTTSettings,
     menuModeTimeSettings,
@@ -190,7 +192,8 @@ struct state
     float battery_capacity;
     enum menuMode menu_mode = menuModeGraphs;
     bool auto_calibration_on = false;
-    int calibration_value = 400;
+    int calibration_ppm_value = 400;
+    float calibration_temp_value = 22.0;
     enum info cal_info = infoEmpty;
     bool is_wifi_activated = false;
     bool is_config_running = false;
@@ -363,9 +366,13 @@ void drawValues(struct state *oldstate, struct state *state);
 
 void drawGraph(struct state *oldstate, struct state *state);
 
-void drawCalibrationSettings(struct state *oldstate, struct state *state);
+void drawCalibrationPpmSettings(struct state *oldstate, struct state *state);
+
+void drawCalibrationTempSettings(struct state *oldstate, struct state *state);
 
 void drawCalibrationAlert(struct state *oldstate, struct state *state);
+
+void drawCalibrationTempAlert(struct state *oldstate, struct state *state);
 
 void drawWiFiSettings(struct state *oldstate, struct state *state);
 

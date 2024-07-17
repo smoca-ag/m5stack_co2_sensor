@@ -324,7 +324,7 @@ void loadStateFile()
         }
 
         state.auto_calibration_on = auto_cal_string == "1" ? true : false;
-        state.calibration_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
+        state.calibration_ppm_value = calibration_string.toInt() < 400 ? 400 : calibration_string.toInt();
         state.is_wifi_activated = is_wifi_activated == "1" ? true : false;
         state.is_screen_rotated = is_screen_rotated == "1" ? true : false;
         STRCPY(state.password, password.c_str());
@@ -349,7 +349,7 @@ void saveStateFile(struct state *oldstate, struct state *state)
 {
     if (state->battery_capacity == oldstate->battery_capacity &&
         state->auto_calibration_on == oldstate->auto_calibration_on &&
-        state->calibration_value == oldstate->calibration_value &&
+        state->calibration_ppm_value == oldstate->calibration_ppm_value &&
         state->is_wifi_activated == oldstate->is_wifi_activated &&
         state->is_screen_rotated == oldstate->is_screen_rotated &&
         strncmp(state->password, oldstate->password, MAX_CP_PASSWORD_LEN) == 0 &&
@@ -362,7 +362,7 @@ void saveStateFile(struct state *oldstate, struct state *state)
     f.print(
         (String)state->battery_capacity + "\n" +
         (String)state->auto_calibration_on + "\n" +
-        (String)state->calibration_value + "\n" +
+        (String)state->calibration_ppm_value + "\n" +
         (state->is_wifi_activated ? "1" : "0") + "\n" +
         (state->is_screen_rotated ? "1" : "0") + "\n" +
         (String)state->password + "\n" +
@@ -479,7 +479,7 @@ void initAirSensor()
     {
         currentAirSensor = &airSensorSCD40;
         Serial.println("Air sensor SCD4x detected.");
-        airSensorSCD40.setTemperatureOffset(8.0);
+        airSensorSCD40.setTemperatureOffset(12.5);
         airSensorSCD40.setSensorAltitude(440);
         airSensorSCD40.startPeriodicMeasurement();
     } 
@@ -1184,10 +1184,14 @@ void handleNavigation(struct state *state)
     switch (state->menu_mode)
     {
     case menuModeGraphs:
-        state->menu_mode = menuModeCalibrationSettings;
+        state->menu_mode = menuModeCalibrationPpmSettings;
         break;
 
-    case menuModeCalibrationSettings:
+    case menuModeCalibrationPpmSettings:
+        state->menu_mode = menuModeCalibrationTempSettings;
+        break;
+
+    case menuModeCalibrationTempSettings:
         state->menu_mode = menuModeWiFiSettings;
         break;
 
@@ -1492,11 +1496,11 @@ void updateTouch(struct state *state)
             state->graph_mode = graphModeHumidity;
         break;
 
-    case menuModeCalibrationSettings:
+    case menuModeCalibrationPpmSettings:
         if (midLeftButton.wasPressed())
-            state->calibration_value -= state->calibration_value >= 410 ? 10 : 0;
+            state->calibration_ppm_value -= state->calibration_ppm_value >= 410 ? 10 : 0;
         if (midRightButton.wasPressed())
-            state->calibration_value += state->calibration_value <= 1990 ? 10 : 0;
+            state->calibration_ppm_value += state->calibration_ppm_value <= 1990 ? 10 : 0;
         if (toggleAutoCalButton.wasPressed())
         {
             state->auto_calibration_on = !state->auto_calibration_on;
@@ -1510,27 +1514,62 @@ void updateTouch(struct state *state)
             }
         }
         if (submitCalibrationButton.wasPressed())
-            state->menu_mode = menuModeCalibrationAlert;
+            state->menu_mode = menuModeCalibrationPpmAlert;
         break;
 
-    case menuModeCalibrationAlert:
+    case menuModeCalibrationTempSettings:
+        if (midLeftButton.wasPressed())
+            state->calibration_temp_value -= state->calibration_temp_value >= 10.0 ? 0.1 : 0;
+        if (midRightButton.wasPressed())
+            state->calibration_temp_value += state->calibration_temp_value <= 42.0 ? 0.1 : 0;
+
+        if (submitCalibrationButton.wasPressed())
+            state->menu_mode = menuModeCalibrationTempAlert;
+        break;
+
+    case menuModeCalibrationTempAlert:
         if (submitCalibrationButton.wasPressed())
         {
             if (currentAirSensor == &airSensorSCD30)
             {
-                airSensorSCD30.setForcedRecalibrationFactor(state->calibration_value);
+                float temp_now = airSensorSCD30.getTemperature();
+                float temp_target = state->calibration_temp_value;
+                float offset = temp_now - temp_target;
+                airSensorSCD30.setTemperatureOffset(offset);
+            } 
+            else if (currentAirSensor == &airSensorSCD40)
+            {
+                float temp_now = airSensorSCD40.getTemperature();
+                float temp_target = state->calibration_temp_value;
+                float offset = temp_now - temp_target;
+                airSensorSCD40.stopPeriodicMeasurement();
+                airSensorSCD40.setTemperatureOffset(offset);
+                airSensorSCD40.startPeriodicMeasurement();
+            }
+            state->menu_mode = menuModeCalibrationTempSettings;
+        }
+        if (toggleAutoCalButton.wasPressed())
+            state->menu_mode = menuModeCalibrationTempSettings;
+        break;
+
+    case menuModeCalibrationPpmAlert:
+        if (submitCalibrationButton.wasPressed())
+        {
+            if (currentAirSensor == &airSensorSCD30)
+            {
+                airSensorSCD30.setForcedRecalibrationFactor(state->calibration_ppm_value);
             } 
             else if (currentAirSensor == &airSensorSCD40)
             {
                 airSensorSCD40.stopPeriodicMeasurement();
-                airSensorSCD40.performForcedRecalibration(state->calibration_value);
+                airSensorSCD40.performForcedRecalibration(state->calibration_ppm_value);
                 airSensorSCD40.startPeriodicMeasurement();
             }
-            state->menu_mode = menuModeCalibrationSettings;
+            state->menu_mode = menuModeCalibrationPpmSettings;
             state->cal_info = infoCalSuccess;
         }
         if (toggleAutoCalButton.wasPressed())
-            state->menu_mode = menuModeCalibrationSettings;
+            state->menu_mode = menuModeCalibrationPpmSettings;
         break;
 
     case menuModeWiFiSettings:
@@ -1797,15 +1836,25 @@ void drawScreen(struct state *oldstate, struct state *state)
             drawValues(oldstate, state);
             drawGraph(oldstate, state);
         }
-        else if (state->menu_mode == menuModeCalibrationSettings)
+        else if (state->menu_mode == menuModeCalibrationPpmSettings)
         {
             clearScreen(oldstate, state);
-            drawCalibrationSettings(oldstate, state);
+            drawCalibrationPpmSettings(oldstate, state);
         }
-        else if (state->menu_mode == menuModeCalibrationAlert)
+        else if (state->menu_mode == menuModeCalibrationTempSettings)
+        {
+            clearScreen(oldstate, state);
+            drawCalibrationTempSettings(oldstate, state);
+        }
+        else if (state->menu_mode == menuModeCalibrationPpmAlert)
         {
             clearScreen(oldstate, state);
             drawCalibrationAlert(oldstate, state);
+        }
+        else if (state->menu_mode == menuModeCalibrationTempAlert)
+        {
+            clearScreen(oldstate, state);
+            drawCalibrationTempAlert(oldstate, state);
         }
         else if (state->menu_mode == menuModeWiFiSettings)
         {
@@ -1969,10 +2018,10 @@ void drawGraph(struct state *oldstate, struct state *state)
     DisbuffGraph.pushSprite(0, 144);
 }
 
-void drawCalibrationSettings(struct state *oldstate, struct state *state)
+void drawCalibrationPpmSettings(struct state *oldstate, struct state *state)
 {
     if (state->display_sleep == oldstate->display_sleep &&
-        state->calibration_value == oldstate->calibration_value &&
+        state->calibration_ppm_value == oldstate->calibration_ppm_value &&
         state->auto_calibration_on == oldstate->auto_calibration_on &&
         state->cal_info == oldstate->cal_info &&
         state->menu_mode == oldstate->menu_mode)
@@ -1983,12 +2032,12 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state)
     DisbuffBody.setTextSize(1);
     DisbuffBody.setFreeFont(&FreeMono18pt7b);
     DisbuffBody.setTextColor(WHITE);
-    DisbuffBody.drawString("Calibration: ", 45, 5);
+    DisbuffBody.drawString("ppm Calibration", 2, 5);
 
     DisbuffBody.setFreeFont(&FreeMonoBold12pt7b);
-    DisbuffBody.setTextColor(co2color(state->calibration_value));
+    DisbuffBody.setTextColor(co2color(state->calibration_ppm_value));
     DisbuffBody.setTextSize(2);
-    DisbuffBody.drawString(String(state->calibration_value) + "ppm", 80, 30);
+    DisbuffBody.drawString(String(state->calibration_ppm_value) + "ppm", 80, 30);
     DisbuffBody.setTextSize(1);
 
     DisbuffBody.setFreeFont(&FreeMono9pt7b);
@@ -2013,6 +2062,7 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state)
     toggleAutoCalButton.on = state->auto_calibration_on ? onGreen : offGreen;
     String toggleAutoCalLabel = state->auto_calibration_on ? "Auto Cal: ON" : "Auto Cal: OFF";
     toggleAutoCalButton.setLabel(toggleAutoCalLabel.c_str());
+    Serial.print("drawCalibrationPpmSettings: draw toggle button");
     toggleAutoCalButton.draw();
 
     if (!state->auto_calibration_on)
@@ -2022,6 +2072,78 @@ void drawCalibrationSettings(struct state *oldstate, struct state *state)
         submitCalibrationButton.setLabel("Calibrate");
         submitCalibrationButton.draw();
     }
+}
+
+void drawCalibrationTempSettings(struct state *oldstate, struct state *state)
+{
+    if (state->display_sleep == oldstate->display_sleep &&
+        state->calibration_temp_value == oldstate->calibration_temp_value &&
+        state->cal_info == oldstate->cal_info &&
+        state->menu_mode == oldstate->menu_mode)
+        return;
+
+    Serial.print("drawing temp setitngs..");
+    DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+    DisbuffBody.setTextSize(1);
+    DisbuffBody.setFreeFont(&FreeMono18pt7b);
+    DisbuffBody.setTextColor(WHITE);
+    DisbuffBody.drawString("C Calibration", 25, 5);
+
+    DisbuffBody.setFreeFont(&FreeMonoBold12pt7b);
+    DisbuffBody.setTextSize(2);
+    DisbuffBody.drawString(String(state->calibration_temp_value, 1) + "C", 100, 30);
+
+    DisbuffBody.pushSprite(0, 26);
+
+    midLeftButton.setLabel("-");
+    midLeftButton.setFont(&FreeMonoBold12pt7b);
+    midLeftButton.draw();
+    midRightButton.setLabel("+");
+    midRightButton.setFont(&FreeMonoBold12pt7b);
+    midRightButton.draw();
+
+    submitCalibrationButton.off = offCyan;
+    submitCalibrationButton.on = onCyan;
+    toggleAutoCalButton.off = {BLACK, BLACK, BLACK};
+    toggleAutoCalButton.on = {BLACK, BLACK, BLACK};
+    submitCalibrationButton.setLabel("Calibrate");
+    submitCalibrationButton.draw();
+}
+
+void drawCalibrationTempAlert(struct state *oldstate, struct state *state)
+{
+    if (state->display_sleep == oldstate->display_sleep &&
+        state->menu_mode == oldstate->menu_mode)
+        return;
+
+    DisbuffBody.fillRect(0, 0, 320, 214, BLACK);
+
+    DisbuffBody.setTextSize(1);
+    DisbuffBody.setFreeFont(&FreeMono18pt7b);
+    DisbuffBody.setTextColor(WHITE);
+    DisbuffBody.drawString("Attention! ", 65, 20);
+
+    DisbuffBody.setFreeFont(&FreeMono12pt7b);
+    String temp = String(state->calibration_temp_value, 1) + "C";
+    String info0 = "Change Calibration";
+    String info1 = "to " + temp + " ?";
+    String info2 = "This can't be undone.";
+    DisbuffBody.drawString(info0, 30, 55);
+    DisbuffBody.drawString(info1, 90, 80);
+    DisbuffBody.drawString(info2, 20, 105);
+
+    DisbuffBody.pushSprite(0, 26);
+
+    toggleAutoCalButton.off = offRed;
+    toggleAutoCalButton.on = onRed;
+    toggleAutoCalButton.setLabel("NO");
+    Serial.print("drawCalibrationTempAlert: draw toggle button");
+    toggleAutoCalButton.draw();
+    submitCalibrationButton.off = offGreen;
+    submitCalibrationButton.on = onGreen;
+    submitCalibrationButton.setLabel("YES");
+    submitCalibrationButton.draw();
 }
 
 void drawCalibrationAlert(struct state *oldstate, struct state *state)
@@ -2037,7 +2159,7 @@ void drawCalibrationAlert(struct state *oldstate, struct state *state)
     DisbuffBody.drawString("Attention! ", 65, 20);
 
     DisbuffBody.setFreeFont(&FreeMono12pt7b);
-    String ppm = String(state->calibration_value) + "ppm";
+    String ppm = String(state->calibration_ppm_value) + "ppm";
     String info0 = "Change Calibration";
     String info1 = "to " + ppm + " ?";
     String info2 = "This can't be undone.";
@@ -2048,6 +2170,7 @@ void drawCalibrationAlert(struct state *oldstate, struct state *state)
     DisbuffBody.pushSprite(0, 26);
 
     toggleAutoCalButton.setLabel("NO");
+    Serial.print("drawCalibrationAlert: draw toggle button");
     toggleAutoCalButton.draw();
     submitCalibrationButton.off = offGreen;
     submitCalibrationButton.on = onGreen;
