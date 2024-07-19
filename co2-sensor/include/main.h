@@ -194,6 +194,7 @@ struct state
     bool auto_calibration_on = false;
     int calibration_ppm_value = 400;
     float calibration_temp_value = 22.0;
+    float temp_offset = 12.0;
     enum info cal_info = infoEmpty;
     bool is_wifi_activated = false;
     bool is_config_running = false;

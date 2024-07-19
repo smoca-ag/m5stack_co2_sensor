@@ -472,14 +472,14 @@ void initAirSensor()
     {
         currentAirSensor = &airSensorSCD30;
         Serial.println("Air sensor SCD30 detected.");
-        airSensorSCD30.setTemperatureOffset(7.2);
+        airSensorSCD30.setTemperatureOffset(state.temp_offset);
         airSensorSCD30.setAltitudeCompensation(440);
     } 
     else if (airSensorSCD40.begin(Wire, state.auto_calibration_on) == true)
     {
         currentAirSensor = &airSensorSCD40;
         Serial.println("Air sensor SCD4x detected.");
-        airSensorSCD40.setTemperatureOffset(12.5);
+        airSensorSCD40.setTemperatureOffset(state.temp_offset);
         airSensorSCD40.setSensorAltitude(440);
         airSensorSCD40.startPeriodicMeasurement();
     } 
@@ -1532,18 +1532,23 @@ void updateTouch(struct state *state)
         {
             if (currentAirSensor == &airSensorSCD30)
             {
+                // temp_now + old_offset - temp_target = new offset
                 float temp_now = airSensorSCD30.getTemperature();
                 float temp_target = state->calibration_temp_value;
-                float offset = temp_now - temp_target;
-                airSensorSCD30.setTemperatureOffset(offset);
+                float old_offset = state->temp_offset;
+                float new_offset = temp_now + old_offset - temp_target;
+                state->temp_offset = new_offset;
+                airSensorSCD30.setTemperatureOffset(new_offset);
             } 
             else if (currentAirSensor == &airSensorSCD40)
             {
                 float temp_now = airSensorSCD40.getTemperature();
                 float temp_target = state->calibration_temp_value;
-                float offset = temp_now - temp_target;
+                float old_offset = state->temp_offset;
+                float new_offset = temp_now + old_offset - temp_target;
+                state->temp_offset = new_offset;
                 airSensorSCD40.stopPeriodicMeasurement();
-                airSensorSCD40.setTemperatureOffset(offset);
+                airSensorSCD40.setTemperatureOffset(new_offset);
                 airSensorSCD40.startPeriodicMeasurement();
             }
             state->menu_mode = menuModeCalibrationTempSettings;
