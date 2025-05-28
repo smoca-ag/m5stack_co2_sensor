@@ -133,6 +133,9 @@ If a microsd card formated with fat is present, a csv file, data.txt will be wri
 - We use it at our office to control a couple of exhaust / inlet pwm computer fans to keep the CO₂ level below 800 ppm.
 - We log the measurement results to a influxdb with a grafana dashboard. The grafana instance sends alerts to telegram for CO₂ levels above 800 ppm.
 
+## SCD4x
+There is a PCB in the PCB folder for SCD41 Support. The Code Supports transparently SCD40 and SCD30 at the moment.
+
 ## Contact
 
 If you have any suggestions for the project feel free to file an issue. If you want to build the device on a bigger scale / have any other development / prototyping needs, feel free to contact us: info@smoca.ch
