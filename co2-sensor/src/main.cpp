@@ -16,11 +16,13 @@
  */
 
 #include <main.h>
+
+#ifdef LWIP_SNMP
 #include <lwip/apps/snmp.h>
 #include <sensorhub-mib.h>
-
 static const struct snmp_mib *mibs[] = {
     &sensorhub_mib};
+#endif
 
 struct state state;
 struct graph graph;
@@ -210,6 +212,7 @@ void setup()
     Serial.println(" status: " + (String)WiFi.status());
 }
 
+#if LWIP_SNMP
 extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type)
 {
     switch (sensor_id)
@@ -242,6 +245,7 @@ extern "C" int get_measurement(u32_t sensor_id, u32_t measurement_type)
         return 0;
     }
 }
+#endif
 
 void loop()
 {
@@ -474,7 +478,7 @@ void initAirSensor()
         Serial.println("Air sensor SCD30 detected.");
         airSensorSCD30.setTemperatureOffset(state.temp_offset);
         airSensorSCD30.setAltitudeCompensation(440);
-    } 
+    }
     else if (airSensorSCD40.begin(Wire, state.auto_calibration_on) == true)
     {
         currentAirSensor = &airSensorSCD40;
@@ -482,8 +486,8 @@ void initAirSensor()
         airSensorSCD40.setTemperatureOffset(state.temp_offset);
         airSensorSCD40.setSensorAltitude(440);
         airSensorSCD40.startPeriodicMeasurement();
-    } 
-    else 
+    }
+    else
     {
         DisbuffValue.setTextColor(RED);
         Serial.println("Air sensor not detected. Please check wiring. Freezing...");
@@ -572,7 +576,7 @@ void initHumidityDiscoveryConfig(struct discoveryConfig *config)
     String unitOfMeasure = "%";
     String valueTemplate = "{{ value_json.humidity }}";
     String deviceClass = "humidity";
-    
+
     initDiscoveryValueConfig(
         config,
         configurationTopic,
@@ -1051,7 +1055,7 @@ void sendMQTTDiscoveryMessage(struct discoveryConfig* config)
     json[HOMEASSISTANT_VALUE_TEMPLATE_Label] = config->valueTemplate;
     json[HOMEASSISTANT_DEVICE_CLASS_Label] = config->deviceClass;
     json["state_class"] = "measurement";
-    
+
     size_t n = serializeJson(json, buffer);
     mqtt.publish((const char*)topic.c_str(), buffer, n, true);
 }
@@ -1111,7 +1115,7 @@ void loadMQTTConfig()
 
     if (json.containsKey(MQTT_USERNAME_Label))
         STRCPY(state.mqttUser, json[MQTT_USERNAME_Label].as<char *>());
-        
+
     if (json.containsKey(MQTT_KEY_Label))
         STRCPY(state.mqttPassword, json[MQTT_KEY_Label].as<char *>());
 }
@@ -1507,8 +1511,8 @@ void updateTouch(struct state *state)
             if (currentAirSensor == &airSensorSCD30)
             {
                 airSensorSCD30.setAutoSelfCalibration(state->auto_calibration_on);
-            } 
-            else if (currentAirSensor == &airSensorSCD40) 
+            }
+            else if (currentAirSensor == &airSensorSCD40)
             {
                 airSensorSCD40.setAutomaticSelfCalibrationEnabled(state->auto_calibration_on);
             }
@@ -1539,7 +1543,7 @@ void updateTouch(struct state *state)
                 float new_offset = temp_now + old_offset - temp_target;
                 state->temp_offset = new_offset;
                 airSensorSCD30.setTemperatureOffset(new_offset);
-            } 
+            }
             else if (currentAirSensor == &airSensorSCD40)
             {
                 float temp_now = airSensorSCD40.getTemperature();
@@ -1563,7 +1567,7 @@ void updateTouch(struct state *state)
             if (currentAirSensor == &airSensorSCD30)
             {
                 airSensorSCD30.setForcedRecalibrationFactor(state->calibration_ppm_value);
-            } 
+            }
             else if (currentAirSensor == &airSensorSCD40)
             {
                 airSensorSCD40.stopPeriodicMeasurement();
